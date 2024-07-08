@@ -34,7 +34,7 @@ new NfsServer()
   ]
   return lists.every(list => list.bucket === bucket && list.secret === secret && list.token === token)
 })
-.setRootFolder('nfs')
+.directory('nfs')
 .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
 
 ```
@@ -48,7 +48,6 @@ const nfs = new NfsClient({
   bucket    : '<YOUR BUCKET>',  // bucket name
   url       : '<YOUR URL>' // https://nfs-server.example.com
 })
-directory('nfs')
 .onError((err, nfs) => {
   console.log('nfs client failed to connect')
   console.log(err.message)
