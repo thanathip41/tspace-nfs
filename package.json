@@ -1,0 +1,51 @@
+{
+  "name": "tspace-nfs",
+  "version": "1.0.0",
+  "description": "NFS stands for Network File System and provides both server and client capabilities for accessing files over a network.",
+  "main": "./build/lib/index.js",
+  "types": "./build/lib/index.d.ts",
+  "files": [
+    "build"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thanathip41/tspace-spear.git"
+  },
+  "keywords": [
+    "tspace",
+    "tspace-nfs",
+    "nfs",
+    "network file system"
+  ],
+  "author": "Thanathip (https://github.com/thanathip41)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/thanathip41/tspace-nfs"
+  },
+  "homepage": "https://github.com/thanathip41",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "start:client": "ts-node test/client.ts",
+    "start:server": "ts-node test/server.ts",
+    "test": "ts-node src/tests/client.test.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "tspace-spear": "^1.0.1",
+    "tspace-utils": "^1.0.4",
+    "xml": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/express": "^4.17.21",
+    "@types/express-fileupload": "^1.5.0",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/xml": "^1.0.11",
+    "express": "^4.19.2",
+    "express-fileupload": "^1.5.0",
+    "tspace-mysql": "^1.7.0"
+  }
+}
