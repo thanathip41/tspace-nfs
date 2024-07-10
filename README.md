@@ -34,7 +34,12 @@ new NfsServer()
   ]
   return lists.every(list => list.bucket === bucket && list.secret === secret && list.token === token)
 })
+.defaultPage(`<b> hello nfs-server! </b>`)
 .directory('nfs')
+.credentials({
+  expired : 1000 * 60 * 60 * 24, 
+  secret  : 'credential-secret'
+})
 .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
 
 ```
@@ -60,7 +65,8 @@ const nfs = new NfsClient({
 (async () => {
 
   const fileDirectory = 'my-cat.png'
-  const url = await nfs.toURL(fileDirectory , { download : true }) // default download true
+
+  const url = await nfs.toURL(fileDirectory , { download : false }) // default download true
 
   const base64 = await nfs.toBase64(fileDirectory)
 

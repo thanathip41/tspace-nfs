@@ -3,8 +3,8 @@ import fs         from 'fs';
 import jwt        from 'jsonwebtoken'
 import xml        from 'xml'
 import bcrypt     from 'bcrypt'
-import { Server } from 'http';
-import { Time }   from 'tspace-utils';
+import { Server } from 'http'
+import { Time }   from 'tspace-utils'
 import Spear , { 
   Router, TContext 
 } from 'tspace-spear'
@@ -12,17 +12,23 @@ import Spear , {
 class NfsServer {
 
   private _router !: Router 
+  private _HTML : string | null = null
   private _credentials : Function | null = null
   private _expired : number = 1000 * 60 * 15
-  private _rootFolder : string = 'uploads'
+  private _rootFolder : string = 'nfs'
   private _JWT_EXPRIRES = 1000 * 60 * 60
-  private _JWT_SECRET = "zrYx@1owepoqwieopqwkdasljijiouwie@wewpezq"
+  private _JWT_SECRET = "<SECRET>"
   private _app : Spear = new Spear({
     logger : true
   })
-  
+
   get instance () {
     return this._app
+  }
+
+  defaultPage (html : string) {
+    this._HTML = html
+    return this
   }
 
   directory(folder : string) {
@@ -41,25 +47,34 @@ class NfsServer {
       tempFileDir : 'tmp',
       removeTempFile : {
         remove : true,
-        ms : 1000 * 20
+        ms : 1000 * 30
       }
     })
     
     this._router = new Router()
 
     this._router .get('/' , this._default)
-    this._router .get('/media' , this._media)
-    this._router .post('/connect' , this._connect)
-    this._router .post('/storage' , this._storage)
-    this._router .post('/file' , this._file)
-    this._router .post('/base64' , this._base64)
-    this._router .post('/stream' , this._stream)
-    this._router .post('/upload' , this._upload)
+    this._router .get('/media/*' , this._MEDIA)
+    this._router .post('/api/connect' , this._API_CONNECT)
+    this._router .post('/api/storage' , this._API_STORAGE)
+    this._router .post('/api/file' , this._API_FILE)
+    this._router .post('/api/base64' , this._API_BASE64)
+    this._router .post('/api/stream' , this._API_STREAM)
+    this._router .post('/api/upload' , this._API_UPLOAD)
 
     this._app.useRouter(this._router)
 
-    this._app.notFoundHandler(({ res } : TContext) => {
-      return res.notFound('Router not found')
+    this._app.notFoundHandler(({  req , res }) => {
+      res.setHeader('Content-Type', 'text/xml')
+        const error = {
+            Error : [
+                { Code : 'Not found' },
+                { Message : 'The request was invalid'},
+                { Resource : req.url },
+            ]
+        }
+
+        return res.end(xml([error],{ declaration: true }))
     })
     
     this._app.listen(port, ({ port , server }) => cb == null ? null : cb({ port , server }))
@@ -78,208 +93,16 @@ class NfsServer {
 
   } 
 
-  private _connect = async ({ res , body } : TContext) => {
-  
-    const { token , secret , bucket } = body
+  credentials ({ expired , secret } : { expired : number , secret : string}) {
 
-    if(this._credentials != null) {
-      const credentials = await this._credentials({ 
-        token,
-        secret,
-        bucket
-      })
-  
-      if(!credentials) {
-        return res.status(401).json({
-          message : 'Bad credentials. Please check the your credentials'
-        })
-      }
-    }
+    this._JWT_EXPRIRES = expired
 
-    return res.json({
-      accessToken : jwt.sign({
-        data : {
-          issuer : 'nfs-server',
-          sub : {
-            bucket,
-            token
-          }
-        }
-      }, this._JWT_SECRET , { expiresIn : this._JWT_EXPRIRES , algorithm : 'HS256'})
-    })
+    this._JWT_SECRET = secret
+
+    return this
   }
 
-  private _upload = async ({ res , files , body , headers } : TContext) => {
-  
-    const authorization = String(headers.authorization).split(' ')[1];
-
-    if(authorization == null) {
-      return res.status(401).json({
-        message : 'unauthorized'
-      })
-    }
-
-    const { bucket } = this._verify(authorization)
-
-    const file = files?.file[0]
-
-    const { folder } = body
-  
-    if (file == null) {
-      return res.status(400).json({
-        message : 'No file were uploaded.'
-      })
-    }
-
-    const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
-
-    if (!fs.existsSync(fullDirectory)) {
-      fs.mkdirSync(fullDirectory, {
-        recursive: true
-      })
-    }
-
-    const writeFile = (file : string , to : string) => {
-      return new Promise<null>((resolve, reject) => {
-        fs.createReadStream(file, { encoding: 'base64' })
-        .pipe(fs.createWriteStream(to, { encoding: 'base64' }))
-        .on('finish', () => {
-          return resolve(null)
-        })
-        .on('error', (err) => reject(err));
-        return 
-      })
-    }
-
-    await writeFile(file.tempFilePath , Path.join(Path.resolve(),`${fullDirectory}/${file.name}`))
-
-    return res.ok()
-  }
-
-  private _storage =  async ({ res , body , headers } : TContext) => {
-    try {
-  
-      const authorization = String(headers.authorization).split(' ')[1];
-
-      if(authorization == null) {
-        return res.status(401).json({
-          message : 'unauthorized'
-        })
-      }
-
-      const { folder } = body
-  
-      const { bucket } = this._verify(authorization)
-      
-      const directory = Path.join(
-        Path.resolve(), 
-        folder == null 
-          ? `${this._rootFolder}/${bucket}` 
-          : `${this._rootFolder}/${bucket}/${folder}`
-      )
-
-      if(!fs.existsSync(directory)) {
-        return res.status(404).json({
-          message : `No such directory or folder, '${folder}'`
-        })
-      }
-  
-      const fileDirectories = await this._files(directory)
-
-      const storage = fileDirectories.map((name) => {
-        const stat = fs.statSync(name)
-        return {
-          name :  Path.relative(directory, name).replace(/\\/g, '/'),
-          size : Number((stat.size / (1024 * 1024))) 
-        }
-      })
-
-      return res.ok({
-        storage
-      })
-  
-    } catch (err : any) {
-      return res.status(500).json({
-        message : err.message
-      })
-    }
-  }
-  
-  private _file =  async ({ res , body , headers } : TContext) => {
-    try {
-  
-      const { path : filename , download } = body
-
-      const authorization = String(headers.authorization).split(' ')[1];
-
-      if(authorization == null) {
-        return res.status(401).json({
-          message : 'unauthorized'
-        })
-      }
-  
-      const { bucket , token } = this._verify(authorization)
-      
-      const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
-  
-      if(!fs.existsSync(dir)) {
-        return res.status(404).json({
-          message : `No such directory or file, '${filename}'`
-        })
-      }
-  
-      const key       = String(token)
-      const expires   = new Time().addSeconds(this._expired).toTimeStamp()
-      const path      = `${filename}`
-      const combined  = `@{${path}-${key}-${expires}-${bucket}-${download}}`
-      const signature = bcrypt.hashSync(combined , 1)
-  
-      return res.ok({
-        endpoint : `media?path=${path}&key=${key}&bucket=${bucket}&expires=${expires}&download=${download}&signature=${signature}`
-      })
-  
-    } catch (err : any) {
-      return res.status(500).json({
-        message : err.message
-      })
-    }
-  }
-
-  private _base64 =  async ({ res , body , headers } : TContext) => {
-    try {
-  
-      const { path : filename } = body
-
-      const authorization = String(headers.authorization).split(' ')[1];
-
-      if(authorization == null) {
-        return res.status(401).json({
-          message : 'unauthorized'
-        })
-      }
-  
-      const { bucket } = this._verify(authorization)
-      
-      const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
-  
-      if(!fs.existsSync(dir)) {
-        return res.status(404).json({
-          message : `no such file or directory, '${filename}'`
-        })
-      }
-  
-      return res.json({
-        base64 : fs.readFileSync(dir, 'base64')
-      })
-  
-    } catch (err : any) {
-      return res.status(500).json({
-        message : err.message
-      })
-    }
-  }
-
-  private _default = (async ({ req , res , query} : TContext) => {
+  private _default = async ({ res } : TContext) => {
 
     const html = `
       <!DOCTYPE html>
@@ -287,7 +110,7 @@ class NfsServer {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Node.js HTML Server</title>
+            <title>NFS-Server</title>
         </head>
         <body>
         </body>
@@ -295,30 +118,28 @@ class NfsServer {
     `
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html');
-    return res.end(html);
-  })
+    return res.end(this._HTML == null ? html : String(this._HTML));
+  }
   
-  private _media = (async ({ req , res , query } : TContext) => {
+  private _MEDIA = async ({ req , res , query , params} : TContext) => {
       try {
 
         const { 
             key , 
             expires , 
             signature , 
-            path,
             bucket,
             download
         } = query as { 
           bucket: string,
           key : string, 
           expires : string, 
-          signature : string, 
-          path : string 
+          signature : string,
           download : string
         }
-
+      
         if([
-          key , expires , signature , path , bucket , download 
+          key , expires , signature , bucket , download 
         ].some(v => v === '' || v == null)) {
 
           res.setHeader('Content-Type', 'text/xml')
@@ -334,9 +155,11 @@ class NfsServer {
           return res.end(xml([error],{ declaration: true }))
         }
 
-        const combined = `@{${path}-${key}-${expires}-${bucket}-${download}}`
-        const compare = bcrypt.compareSync(combined, signature)
-        const expired =  Number.isNaN(+expires) ? true : new Date(+expires) < new Date() 
+        const path = String(params['*']).replace(/^\/+/, '')
+
+        const combined = `@{${path}-${bucket}-${key}-${expires}-${download}}`
+        const compare  = bcrypt.compareSync(combined, Buffer.from(signature,'base64').toString('utf-8'))
+        const expired  = Number.isNaN(+expires) ? true : new Date(+expires) < new Date() 
   
         if(!compare || expired) {
             
@@ -395,9 +218,90 @@ class NfsServer {
   
         return res.end(xml([error],{ declaration: true }))
     }
-  })
+  }
 
-  private _stream = async ({ req , res , body , headers } : TContext) => {
+  private _API_FILE =  async ({ res , body , headers } : TContext) => {
+    try {
+  
+      const authorization = String(headers.authorization).split(' ')[1];
+
+      if(authorization == null) {
+        return res.status(401).json({
+          message : 'unauthorized'
+        })
+      }
+  
+      const { bucket , token } = this._verify(authorization)
+
+      const { path , download } = body
+
+      const fileName = `${path}`.replace(/^\/+/, '')
+      
+      const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${fileName}`)
+  
+      if(!fs.existsSync(dir)) {
+        return res.status(404).json({
+          message : `No such directory or file, '${fileName}'`
+        })
+      }
+  
+      const key       = String(token)
+      const expires   = new Time().addSeconds(this._expired).toTimeStamp()
+      const combined  = `@{${path}-${bucket}-${key}-${expires}-${download}}`
+      const signature = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
+  
+      return res.ok({
+        endpoint : [
+          `media/${fileName}?bucket=${bucket}`,
+          `key=${key}`,
+          `expires=${expires}`,
+          `download=${download}`,
+          `signature=${signature}`
+        ].join('&')
+      })
+  
+    } catch (err : any) {
+      return res.status(500).json({
+        message : err.message
+      })
+    }
+  }
+
+  private _API_BASE64 =  async ({ res , body , headers } : TContext) => {
+    try {
+  
+      const { path : filename } = body
+
+      const authorization = String(headers.authorization).split(' ')[1];
+
+      if(authorization == null) {
+        return res.status(401).json({
+          message : 'unauthorized'
+        })
+      }
+  
+      const { bucket } = this._verify(authorization)
+      
+      const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
+  
+      if(!fs.existsSync(dir)) {
+        return res.status(404).json({
+          message : `no such file or directory, '${filename}'`
+        })
+      }
+  
+      return res.json({
+        base64 : fs.readFileSync(dir, 'base64')
+      })
+  
+    } catch (err : any) {
+      return res.status(500).json({
+        message : err.message
+      })
+    }
+  }
+
+  private _API_STREAM = async ({ req , res , body , headers } : TContext) => {
 
     const { path : filename , range } = body
 
@@ -446,8 +350,140 @@ class NfsServer {
 
     return fs.createReadStream(dir).pipe(res);
   }
+
+  private _API_STORAGE =  async ({ res , body , headers } : TContext) => {
+    try {
   
-  private _makeStream = async ({ bucket , filePath , range , download = false } : { bucket : string , filePath : string; range ?: string; download : boolean }) => {
+      const authorization = String(headers.authorization).split(' ')[1];
+
+      if(authorization == null) {
+        return res.status(401).json({
+          message : 'unauthorized'
+        })
+      }
+
+      const { folder } = body
+  
+      const { bucket } = this._verify(authorization)
+      
+      const directory = Path.join(
+        Path.resolve(), 
+        folder == null 
+          ? `${this._rootFolder}/${bucket}` 
+          : `${this._rootFolder}/${bucket}/${folder}`
+      )
+
+      if(!fs.existsSync(directory)) {
+        return res.status(404).json({
+          message : `No such directory or folder, '${folder}'`
+        })
+      }
+  
+      const fileDirectories = await this._files(directory)
+
+      const storage = fileDirectories.map((name) => {
+        const stat = fs.statSync(name)
+        return {
+          name :  Path.relative(directory, name).replace(/\\/g, '/'),
+          size : Number((stat.size / (1024 * 1024))) 
+        }
+      })
+
+      return res.ok({
+        storage
+      })
+  
+    } catch (err : any) {
+      return res.status(500).json({
+        message : err.message
+      })
+    }
+  }
+
+  private _API_UPLOAD = async ({ res , files , body , headers } : TContext) => {
+  
+    const authorization = String(headers.authorization).split(' ')[1];
+
+    if(authorization == null) {
+      return res.status(401).json({
+        message : 'unauthorized'
+      })
+    }
+
+    const { bucket } = this._verify(authorization)
+
+    const file = files?.file[0]
+
+    const { folder } = body
+  
+    if (file == null) {
+      return res.status(400).json({
+        message : 'No file were uploaded.'
+      })
+    }
+
+    const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
+
+    if (!fs.existsSync(fullDirectory)) {
+      fs.mkdirSync(fullDirectory, {
+        recursive: true
+      })
+    }
+
+    const writeFile = (file : string , to : string) => {
+      return new Promise<null>((resolve, reject) => {
+        fs.createReadStream(file, { encoding: 'base64' })
+        .pipe(fs.createWriteStream(to, { encoding: 'base64' }))
+        .on('finish', () => {
+          return resolve(null)
+        })
+        .on('error', (err) => reject(err));
+        return 
+      })
+    }
+
+    await writeFile(file.tempFilePath , Path.join(Path.resolve(),`${fullDirectory}/${file.name}`))
+
+    return res.ok()
+  }
+
+  private _API_CONNECT = async ({ res , body } : TContext) => {
+  
+    const { token , secret , bucket } = body
+
+    if(this._credentials != null) {
+      const credentials = await this._credentials({ 
+        token,
+        secret,
+        bucket
+      })
+  
+      if(!credentials) {
+        return res.status(401).json({
+          message : 'Bad credentials. Please check the your credentials'
+        })
+      }
+    }
+
+    return res.json({
+      accessToken : jwt.sign({
+        data : {
+          issuer : 'nfs-server',
+          sub : {
+            bucket,
+            token
+          }
+        }
+      }, this._JWT_SECRET , { expiresIn : this._JWT_EXPRIRES , algorithm : 'HS256'})
+    })
+  }
+  
+  private _makeStream = async ({ bucket , filePath , range , download = false } : { 
+    bucket : string; 
+    filePath : string; 
+    range ?: string; 
+    download : boolean 
+  }) => {
 
     const getContentType = (extension : string) => {
         switch (String(extension).toLowerCase()) {
@@ -603,8 +639,18 @@ class NfsServer {
       }
   
     } catch (err:any) {
-  
-        const error:any = new Error(err.message)
+
+        let message = err.message
+        
+        if (err.name === 'JsonWebTokenError') {
+          message = 'Invalid credentials'
+        } 
+        
+        if (err.name === 'TokenExpiredError') {
+          message = 'Token has expired'
+        } 
+
+        const error:any = new Error(message)
         error.statusCode = 400
               
         throw error      

@@ -4,15 +4,15 @@ import FormData         from 'form-data'
 import fs               from 'fs'
 
 class NfsClient {
-    private _authorization : string     = ''
     private _event                      = new EventEmitter()
+    private _authorization : string     = ''
     private _url                        = 'http://localhost:8000'
-    private _endpointConnect            = '/connect'
-    private _endpointUpload             = '/upload'
-    private _endpointFile               = '/file'
-    private _endpointFileBase64         = '/base64'
-    private _endpointFileStream         = '/stream'
-    private _endpointStorage            = '/storage'
+    private _ENDPOINT_CONNECT           = 'connect'
+    private _ENDPOINT_UPLOAD            = 'upload'
+    private _ENDPOINT_FILE              = 'file'
+    private _ENDPOINT_FILE_BASE64       = 'base64'
+    private _ENDPOINT_FILE_STREAM       = 'stream'
+    private _ENDPOINT_STORAGE           = 'storage'
 
     private _credentials = {
         token : '',
@@ -20,12 +20,12 @@ class NfsClient {
         bucket : ''
     }
 
-    constructor({
-        token,
-        secret,
-        bucket,
-        url
-    } : { token : string; secret : string; bucket : string; url : string}) {
+    constructor({ token, secret, bucket,url } : { 
+        token  : string; 
+        secret : string; 
+        bucket : string;
+        url    : string;
+    }) {
 
         this._credentials = {
             token,
@@ -55,7 +55,7 @@ class NfsClient {
 
     async toURL (path : string , { download = true } = {}) : Promise<string> {
        try {
-            const url = this._URL(this._endpointFile)
+            const url = this._URL(this._ENDPOINT_FILE)
 
             const response = await axios({
                 url,
@@ -88,7 +88,7 @@ class NfsClient {
 
     async toBase64 (path : string) : Promise<string> {
         try {
-             const url = this._URL(this._endpointFileBase64)
+             const url = this._URL(this._ENDPOINT_FILE_BASE64)
  
              const response = await axios({
                 url,
@@ -120,7 +120,7 @@ class NfsClient {
 
     async toStream (path : string , range?: string) : Promise<any> {
         try {
-             const url = this._URL(this._endpointFileStream)
+             const url = this._URL(this._ENDPOINT_FILE_STREAM)
  
              const response = await axios({
                 method: 'post',
@@ -157,7 +157,7 @@ class NfsClient {
 
         try {
 
-            const url = this._URL(this._endpointUpload)
+            const url = this._URL(this._ENDPOINT_UPLOAD)
 
             const data = new FormData();
 
@@ -188,7 +188,7 @@ class NfsClient {
 
         try {
 
-            const url = this._URL(this._endpointStorage)
+            const url = this._URL(this._ENDPOINT_STORAGE)
 
             const response = await axios({
                 url,
@@ -217,7 +217,7 @@ class NfsClient {
     private async _retryConnect() {
         
         const response = await axios.request({
-            url : this._URL(this._endpointConnect),
+            url : this._URL(this._ENDPOINT_CONNECT),
             data : { 
                 ...this._credentials
             }
@@ -230,7 +230,7 @@ class NfsClient {
 
     private _URL (endpoint : string) {
 
-        return `${this._url}${endpoint}`
+        return `${this._url}/api/${endpoint}`
     }
 
     private _getConnect({
@@ -239,7 +239,7 @@ class NfsClient {
         bucket
     } : { token : string; secret : string; bucket : string}) {
 
-        axios.post(`${this._url}${this._endpointConnect}`, { 
+        axios.post(this._URL(this._ENDPOINT_CONNECT), { 
             token,
             secret,
             bucket
