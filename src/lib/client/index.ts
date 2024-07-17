@@ -5,14 +5,16 @@ import fs               from 'fs'
 
 class NfsClient {
     private _event                      = new EventEmitter()
-    private _authorization : string     = ''
+    private _authorization              = ''
     private _url                        = 'http://localhost:8000'
     private _ENDPOINT_CONNECT           = 'connect'
     private _ENDPOINT_UPLOAD            = 'upload'
+    private _ENDPOINT_REMOVE            = 'remove'
     private _ENDPOINT_FILE              = 'file'
     private _ENDPOINT_FILE_BASE64       = 'base64'
     private _ENDPOINT_FILE_STREAM       = 'stream'
     private _ENDPOINT_STORAGE           = 'storage'
+    private _TOKEN_EXPIRED_MESSAGE      = 'jwt expired'
 
     private _credentials = {
         token : '',
@@ -20,7 +22,7 @@ class NfsClient {
         bucket : ''
     }
 
-    constructor({ token, secret, bucket,url } : { 
+    constructor({ token, secret, bucket, url } : { 
         token  : string; 
         secret : string; 
         bucket : string;
@@ -38,19 +40,18 @@ class NfsClient {
         this._getConnect(this._credentials)
     }
 
-    onError (callback : (err : any , self : NfsClient) => void) {
+    onError (callback : (err : any , nfs : NfsClient) => void) {
         this._event.on('error' , callback)
         return this
     }
 
-    onConnect (callback : (self : NfsClient) => void) {
+    onConnect (callback : (nfs : NfsClient) => void) {
         this._event.on('connected' , callback)
         return this
     }
 
-    on (event : 'connected' | 'error' , callback : (...args: any[]) => void) {
-        this._event.on(event , callback)
-        return this
+    quit () {
+        return process.exit(0)
     }
 
     async toURL (path : string , { download = true } = {}) : Promise<string> {
@@ -75,7 +76,7 @@ class NfsClient {
 
             const message  = err.response?.data?.message || err.message
 
-            if(message === 'jwt expired') {
+            if(message === this._TOKEN_EXPIRED_MESSAGE) {
 
                 await this._retryConnect()
 
@@ -107,7 +108,7 @@ class NfsClient {
  
              const message  = err.response?.data?.message || err.message
  
-             if(message === 'jwt expired') {
+             if(message === this._TOKEN_EXPIRED_MESSAGE) {
  
                  await this._retryConnect()
  
@@ -138,7 +139,7 @@ class NfsClient {
  
              const message  = err.response?.data?.message || err.message
  
-             if(message === 'jwt expired') {
+             if(message === this._TOKEN_EXPIRED_MESSAGE) {
  
                  await this._retryConnect()
  
@@ -180,6 +181,49 @@ class NfsClient {
 
         } catch (err : any) {
 
+            const message  = err.response?.data?.message || err.message
+ 
+            if(message === this._TOKEN_EXPIRED_MESSAGE) {
+
+                await this._retryConnect()
+
+                return await this.upload({ directory , name , folder })
+            }
+
+            throw new Error(err.response?.data?.message || err.message)
+        }
+    }
+
+    async delete (directory : string ) : Promise<void> {
+
+        try {
+
+            const url = this._URL(this._ENDPOINT_REMOVE)
+
+            await axios({
+                method: 'POST',
+                url,
+                headers: { 
+                    authorization : `bearer ${this._authorization}`
+                },
+                data : {
+                    path: directory
+                }
+            })
+
+            return 
+
+        } catch (err : any) {
+
+            const message  = err.response?.data?.message || err.message
+ 
+            if(message === this._TOKEN_EXPIRED_MESSAGE) {
+
+                await this._retryConnect()
+
+                return await this.delete(directory)
+            }
+
             throw new Error(err.response?.data?.message || err.message)
         }
     }
@@ -204,14 +248,18 @@ class NfsClient {
             return response.data?.storage ?? []
 
         } catch (err : any) {
+
+            const message  = err.response?.data?.message || err.message
+ 
+            if(message === this._TOKEN_EXPIRED_MESSAGE) {
+
+                await this._retryConnect()
+
+                return await this.storage(folder)
+            }
+
             throw new Error(err.response?.data?.message || err.message)
         }
-    }
-
-
-
-    quit () {
-        return process.exit(0)
     }
 
     private async _retryConnect() {

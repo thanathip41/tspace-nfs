@@ -37,9 +37,10 @@ new NfsServer()
 .defaultPage(`<b> hello nfs-server! </b>`)
 .directory('nfs')
 .credentials({
-  expired : 1000 * 60 * 60 * 24, 
+  expired : 1000 * 60 * 60 * 24, // by default 1 hour
   secret  : 'credential-secret'
-})
+}) // the credentials will auto refresh every expired
+fileExpired(60 * 15) // 15 minutes by default 1 hour
 .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
 
 ```
@@ -51,7 +52,7 @@ const nfs = new NfsClient({
   token     : '<YOUR TOKEN>',   // token
   secret    : '<YOUR SECRET>',  // secret
   bucket    : '<YOUR BUCKET>',  // bucket name
-  url       : '<YOUR URL>' // https://nfs-server.example.com
+  url       : '<YOUR URL>'      // https://nfs-server.example.com
 })
 .onError((err, nfs) => {
   console.log('nfs client failed to connect')
@@ -79,6 +80,8 @@ const nfs = new NfsClient({
     name : 'my-video.mp4',
     folder : 'my-folder'
   })
+
+  const deleted = await nfs.delete(fileDirectory)
 
   const storage = await nfs.storage()
 

@@ -1,5 +1,5 @@
-import Path       from 'path';
-import fs         from 'fs';
+import PathSystem from 'path'
+import fsSystem   from 'fs'
 import jwt        from 'jsonwebtoken'
 import xml        from 'xml'
 import bcrypt     from 'bcrypt'
@@ -8,13 +8,14 @@ import { Time }   from 'tspace-utils'
 import Spear , { 
   Router, TContext 
 } from 'tspace-spear'
+import html from './default-html'
 
 class NfsServer {
 
   private _router !: Router 
   private _HTML : string | null = null
   private _credentials : Function | null = null
-  private _expired : number = 1000 * 60 * 15
+  private _fileExpired : number = 60 * 60
   private _rootFolder : string = 'nfs'
   private _JWT_EXPRIRES = 1000 * 60 * 60
   private _JWT_SECRET = "<SECRET>"
@@ -53,14 +54,15 @@ class NfsServer {
     
     this._router = new Router()
 
-    this._router .get('/' , this._default)
-    this._router .get('/media/*' , this._MEDIA)
-    this._router .post('/api/connect' , this._API_CONNECT)
-    this._router .post('/api/storage' , this._API_STORAGE)
-    this._router .post('/api/file' , this._API_FILE)
-    this._router .post('/api/base64' , this._API_BASE64)
-    this._router .post('/api/stream' , this._API_STREAM)
-    this._router .post('/api/upload' , this._API_UPLOAD)
+    this._router.get('/' , this._DEFAULT)
+    this._router.post('/api/connect' , this._API_CONNECT)
+    this._router.post('/api/storage' , this._API_STORAGE)
+    this._router.post('/api/file' , this._API_FILE)
+    this._router.post('/api/base64' , this._API_BASE64)
+    this._router.post('/api/stream' , this._API_STREAM)
+    this._router.post('/api/upload' , this._API_UPLOAD)
+    this._router.post('/api/remove' , this._API_REMOVE)
+    this._router.get('/:bucket/*' , this._MEDIA)
 
     this._app.useRouter(this._router)
 
@@ -80,8 +82,8 @@ class NfsServer {
     this._app.listen(port, ({ port , server }) => cb == null ? null : cb({ port , server }))
   }
 
-  fileExpired (ms : number) {
-    this._expired = ms
+  fileExpired (seconds  : number) {
+    this._fileExpired = seconds 
     return this
   }
 
@@ -102,20 +104,7 @@ class NfsServer {
     return this
   }
 
-  private _default = async ({ res } : TContext) => {
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>NFS-Server</title>
-        </head>
-        <body>
-        </body>
-      </html>
-    `
+  private _DEFAULT = async ({ res } : TContext) => {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html');
     return res.end(this._HTML == null ? html : String(this._HTML));
@@ -128,18 +117,18 @@ class NfsServer {
             key , 
             expires , 
             signature , 
-            bucket,
             download
         } = query as { 
-          bucket: string,
           key : string, 
           expires : string, 
           signature : string,
           download : string
         }
+
+        const bucket = params.bucket
       
         if([
-          key , expires , signature , bucket , download 
+          key , expires , signature , download , bucket
         ].some(v => v === '' || v == null)) {
 
           res.setHeader('Content-Type', 'text/xml')
@@ -156,7 +145,6 @@ class NfsServer {
         }
 
         const path = String(params['*']).replace(/^\/+/, '')
-
         const combined = `@{${path}-${bucket}-${key}-${expires}-${download}}`
         const compare  = bcrypt.compareSync(combined, Buffer.from(signature,'base64').toString('utf-8'))
         const expired  = Number.isNaN(+expires) ? true : new Date(+expires) < new Date() 
@@ -227,7 +215,7 @@ class NfsServer {
 
       if(authorization == null) {
         return res.status(401).json({
-          message : 'unauthorized'
+          message : 'Please check your credentials. Are they valid ?'
         })
       }
   
@@ -237,23 +225,22 @@ class NfsServer {
 
       const fileName = `${path}`.replace(/^\/+/, '')
       
-      const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${fileName}`)
+      const dir = PathSystem.join(PathSystem.resolve(),`${this._rootFolder}/${bucket}/${fileName}`)
   
-      if(!fs.existsSync(dir)) {
+      if(!fsSystem.existsSync(dir)) {
         return res.status(404).json({
           message : `No such directory or file, '${fileName}'`
         })
       }
   
       const key       = String(token)
-      const expires   = new Time().addSeconds(this._expired).toTimeStamp()
+      const expires   = new Time().addSeconds(this._fileExpired).toTimeStamp()
       const combined  = `@{${path}-${bucket}-${key}-${expires}-${download}}`
       const signature = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
   
       return res.ok({
         endpoint : [
-          `media/${fileName}?bucket=${bucket}`,
-          `key=${key}`,
+          `${bucket}/${fileName}?key=${key}`,
           `expires=${expires}`,
           `download=${download}`,
           `signature=${signature}`
@@ -276,22 +263,22 @@ class NfsServer {
 
       if(authorization == null) {
         return res.status(401).json({
-          message : 'unauthorized'
+          message : 'Please check your credentials. Are they valid ?'
         })
       }
   
       const { bucket } = this._verify(authorization)
       
-      const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
+      const dir = PathSystem.join(PathSystem.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
   
-      if(!fs.existsSync(dir)) {
+      if(!fsSystem.existsSync(dir)) {
         return res.status(404).json({
           message : `no such file or directory, '${filename}'`
         })
       }
   
       return res.json({
-        base64 : fs.readFileSync(dir, 'base64')
+        base64 : fsSystem.readFileSync(dir, 'base64')
       })
   
     } catch (err : any) {
@@ -309,21 +296,21 @@ class NfsServer {
 
     if(authorization == null) {
       return res.status(401).json({
-        message : 'unauthorized'
+        message : 'Please check your credentials. Are they valid ?'
       })
     }
 
     const { bucket } = this._verify(authorization)
     
-    const dir = Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
+    const dir = PathSystem.join(PathSystem.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
 
-    if(!fs.existsSync(dir)) {
+    if(!fsSystem.existsSync(dir)) {
       return res.status(404).json({
         message : `no such file or directory, '${filename}'`
       })
     }
 
-    const stat = fs.statSync(dir);
+    const stat = fsSystem.statSync(dir);
     const fileSize = stat.size;
   
     if (range) {
@@ -331,7 +318,7 @@ class NfsServer {
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
       const chunksize = (end - start) + 1;
-      const file = fs.createReadStream(dir, { start, end });
+      const file = fsSystem.createReadStream(dir, { start, end });
       const head = {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
@@ -348,7 +335,7 @@ class NfsServer {
     };
     res.writeHead(200, head);
 
-    return fs.createReadStream(dir).pipe(res);
+    return fsSystem.createReadStream(dir).pipe(res);
   }
 
   private _API_STORAGE =  async ({ res , body , headers } : TContext) => {
@@ -358,7 +345,7 @@ class NfsServer {
 
       if(authorization == null) {
         return res.status(401).json({
-          message : 'unauthorized'
+          message : 'Please check your credentials. Are they valid ?'
         })
       }
 
@@ -366,14 +353,14 @@ class NfsServer {
   
       const { bucket } = this._verify(authorization)
       
-      const directory = Path.join(
-        Path.resolve(), 
+      const directory = PathSystem.join(
+        PathSystem.resolve(), 
         folder == null 
           ? `${this._rootFolder}/${bucket}` 
           : `${this._rootFolder}/${bucket}/${folder}`
       )
 
-      if(!fs.existsSync(directory)) {
+      if(!fsSystem.existsSync(directory)) {
         return res.status(404).json({
           message : `No such directory or folder, '${folder}'`
         })
@@ -382,9 +369,9 @@ class NfsServer {
       const fileDirectories = await this._files(directory)
 
       const storage = fileDirectories.map((name) => {
-        const stat = fs.statSync(name)
+        const stat = fsSystem.statSync(name)
         return {
-          name :  Path.relative(directory, name).replace(/\\/g, '/'),
+          name :  PathSystem.relative(directory, name).replace(/\\/g, '/'),
           size : Number((stat.size / (1024 * 1024))) 
         }
       })
@@ -406,7 +393,7 @@ class NfsServer {
 
     if(authorization == null) {
       return res.status(401).json({
-        message : 'unauthorized'
+        message : 'Please check your credentials. Are they valid ?'
       })
     }
 
@@ -424,16 +411,16 @@ class NfsServer {
 
     const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
 
-    if (!fs.existsSync(fullDirectory)) {
-      fs.mkdirSync(fullDirectory, {
+    if (!fsSystem.existsSync(fullDirectory)) {
+      fsSystem.mkdirSync(fullDirectory, {
         recursive: true
       })
     }
 
     const writeFile = (file : string , to : string) => {
       return new Promise<null>((resolve, reject) => {
-        fs.createReadStream(file, { encoding: 'base64' })
-        .pipe(fs.createWriteStream(to, { encoding: 'base64' }))
+        fsSystem.createReadStream(file, { encoding: 'base64' })
+        .pipe(fsSystem.createWriteStream(to, { encoding: 'base64' }))
         .on('finish', () => {
           return resolve(null)
         })
@@ -442,9 +429,46 @@ class NfsServer {
       })
     }
 
-    await writeFile(file.tempFilePath , Path.join(Path.resolve(),`${fullDirectory}/${file.name}`))
+    await writeFile(file.tempFilePath , PathSystem.join(PathSystem.resolve(),`${fullDirectory}/${file.name}`))
 
     return res.ok()
+  }
+
+  private _API_REMOVE =  async ({ res , body , headers } : TContext) => {
+    try {
+  
+      const authorization = String(headers.authorization).split(' ')[1];
+
+      if(authorization == null) {
+        return res.status(401).json({
+          message : 'Please check your credentials. Are they valid ?'
+        })
+      }
+  
+      const { bucket } = this._verify(authorization)
+
+      const { path } = body
+
+      const fileName = `${path}`.replace(/^\/+/, '')
+      
+      const dir = PathSystem.join(PathSystem.resolve(),`${this._rootFolder}/${bucket}/${fileName}`)
+  
+      if(!fsSystem.existsSync(dir)) {
+        return res.status(404)
+        .json({
+          message : `No such directory or file, '${fileName}'`
+        })
+      }
+
+      try { fsSystem.unlinkSync(dir) } catch (e) {}
+  
+      return res.noContent()
+  
+    } catch (err : any) {
+      return res.status(500).json({
+        message : err.message
+      })
+    }
   }
 
   private _API_CONNECT = async ({ res , body } : TContext) => {
@@ -460,7 +484,7 @@ class NfsServer {
   
       if(!credentials) {
         return res.status(401).json({
-          message : 'Bad credentials. Please check the your credentials'
+          message : 'Invalid credentials. Please check the your credentials'
         })
       }
     }
@@ -549,13 +573,13 @@ class NfsServer {
         }
     }
 
-    const directory =  Path.join(Path.resolve(),`${this._rootFolder}/${bucket}/${filePath}`)
+    const directory =  PathSystem.join(PathSystem.resolve(),`${this._rootFolder}/${bucket}/${filePath}`)
   
     const contentType = getContentType(String(filePath?.split('.')?.pop()))
   
-    const videoStat = fs.statSync(directory)
+    const videoStat = fsSystem.statSync(directory)
   
-    const fileSize = videoStat.size;
+    const fileSize = videoStat.size
 
     const set = (header : Record<string,any> , filePath : string , code = 200 ) => {
   
@@ -587,7 +611,7 @@ class NfsServer {
       };
   
       return {
-        stream :fs.createReadStream(directory),
+        stream :fsSystem.createReadStream(directory),
         header,
         set : set(header,filePath)
       }
@@ -600,7 +624,7 @@ class NfsServer {
       }
   
       return {
-        stream :fs.createReadStream(directory),
+        stream :fsSystem.createReadStream(directory , { highWaterMark : 1024 * 1024 }),
         header,
         set : set(header,filePath)
       }
@@ -612,7 +636,7 @@ class NfsServer {
   
     const chunksize = (end - start) + 1
   
-    const stream = fs.createReadStream(directory , {start, end})
+    const stream = fsSystem.createReadStream(directory , {start, end , highWaterMark : 1024 * 1024 })
   
     const header = {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -658,9 +682,9 @@ class NfsServer {
   }
 
   private async _files (dir : string) {
-    const directories = fs.readdirSync(dir, { withFileTypes: true })
+    const directories = fsSystem.readdirSync(dir, { withFileTypes: true })
     const files : any[] = await Promise.all(directories.map((directory) => {
-      const newDir = Path.resolve(String(dir), directory.name)
+      const newDir = PathSystem.resolve(String(dir), directory.name)
       return directory.isDirectory() ? this._files(newDir) : newDir
     }))
 

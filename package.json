@@ -1,7 +1,7 @@
 {
   "name": "tspace-nfs",
-  "version": "1.0.3",
-  "description": "NFS stands for Network File System and provides both server and client capabilities for accessing files over a network.",
+  "version": "1.0.4",
+  "description": "tspace-nfs is a Network File System (NFS) and provides both server and client capabilities for accessing files over a network.",
   "main": "./build/lib/index.js",
   "types": "./build/lib/index.d.ts",
   "files": [
