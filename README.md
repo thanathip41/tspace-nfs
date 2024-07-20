@@ -32,7 +32,7 @@ new NfsServer()
       bucket : 'dev'
     }
   ]
-  return lists.every(list => list.bucket === bucket && list.secret === secret && list.token === token)
+  return lists.some(list => list.bucket === bucket && list.secret === secret && list.token === token)
 })
 .defaultPage(`<b> hello nfs-server! </b>`)
 .directory('nfs')
@@ -76,8 +76,14 @@ const nfs = new NfsClient({
   const file = files[0] // assume the file from your upload
 
   await nfs.upload({
-    directory : file.tempFilePath,
+    file : file.tempFilePath,
     name : 'my-video.mp4',
+    folder : 'my-folder'
+  })
+
+   await nfs.uploadBase64({
+    base64 :  Buffer.from(file.tempFilePath).toString('base64'),
+    name   : 'my-video.mp4',
     folder : 'my-folder'
   })
 

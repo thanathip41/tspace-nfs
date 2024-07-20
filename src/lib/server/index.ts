@@ -10,36 +10,128 @@ import Spear , {
 } from 'tspace-spear'
 import html from './default-html'
 
+/**
+ * The 'NfsServer' class is a created the server for nfs
+ * 
+ * @example
+ * import { NfsServer } from "tspace-nfs";
+ *
+ * new NfsServer()
+ * .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
+ */
 class NfsServer {
 
-  private _router !: Router 
-  private _HTML : string | null = null
-  private _credentials : Function | null = null
-  private _fileExpired : number = 60 * 60
-  private _rootFolder : string = 'nfs'
-  private _JWT_EXPRIRES = 1000 * 60 * 60
-  private _JWT_SECRET = "<SECRET>"
-  private _app : Spear = new Spear({
-    logger : true
-  })
+  private _app            !: Spear 
+  private _router         !: Router 
+  private _html           !: string | null
+  private _credentials    !: Function | null
+  private _fileExpired    : number = 60 * 60
+  private _rootFolder     : string = 'nfs'
+  private _cluster        : boolean | number = false
+  private _jwtExipred     : number = 60 * 60
+  private _jwtSecret      : string = `<secret@${+new Date()}:${Math.floor(Math.random() * 9999)}>`
 
   get instance () {
     return this._app
   }
 
-  defaultPage (html : string) {
-    this._HTML = html
+  /**
+   * The 'defaultPage' is method used to set default home page
+   * 
+   * @param {string} html 
+   * @returns {this}
+   */
+  defaultPage (html : string): this {
+    this._html = html
     return this
   }
 
-  directory(folder : string) {
+  /**
+   * The 'directory' is method used to set directory for root directory
+   * 
+   * @param {string} folder 
+   * @returns {this}
+   */
+  directory(folder : string): this {
 
     this._rootFolder = folder
 
     return this
   }
 
+  /**
+   * The 'cluster' is method used to make cluster for server
+   * 
+   * @param {number} workers
+   * @returns {this}
+   */
+  cluster (workers ?: number): this {
+
+    this._cluster = workers == null ? true : workers
+
+    return this
+  }
+
+  /**
+   * The 'fileExpired' is method used to set file expiration
+   * 
+   * @param {number} seconds 
+   * @returns {this}
+   */
+  fileExpired (seconds  : number): this {
+    this._fileExpired = seconds 
+    return this
+  }
+
+  /**
+   * The 'credentials' is method used to set expiration and secret for credentials
+   * 
+   * @param    {object}  credentials
+   * @property {number}  credentials.expired
+   * @property {string?} credentials.secret 
+   * @returns  {this}
+   */
+  credentials ({ expired , secret } : { expired : number , secret ?: string}): this {
+
+    this._jwtExipred = expired
+
+    if(secret) {
+      this._jwtSecret = secret
+    }
+
+    return this
+  }
+
+  /**
+   * The 'onCredentials' is method used to wrapper to check the credentials.
+   * 
+   * @param    {function} callback
+   * @returns  {this}
+   */
+  onCredentials (callback : ({ token , secret , bucket } : { token : string; secret : string; bucket : string}) => Promise<boolean>) : this {
+
+    this._credentials = callback
+
+    return this
+
+  } 
+
+  /**
+   * The 'listen' method is used to bind and start a server to a particular port and optionally a hostname.
+   * 
+   * @param {number} port 
+   * @param {function} cb
+   * @returns 
+   */
   listen(port:number, cb ?: ({port , server} : { port : number , server : Server }) => void) {
+
+    this._app = new Spear({
+      cluster : this._cluster
+    })
+
+    this._app.useLogger({
+      exceptPath  : /^(?!\/(benchmark|favicon\.ico)$).*/
+    })
 
     this._app.useBodyParser()
     
@@ -51,18 +143,20 @@ class NfsServer {
         ms : 1000 * 30
       }
     })
-    
+
     this._router = new Router()
 
-    this._router.get('/' , this._DEFAULT)
-    this._router.post('/api/connect' , this._API_CONNECT)
-    this._router.post('/api/storage' , this._API_STORAGE)
-    this._router.post('/api/file' , this._API_FILE)
-    this._router.post('/api/base64' , this._API_BASE64)
-    this._router.post('/api/stream' , this._API_STREAM)
-    this._router.post('/api/upload' , this._API_UPLOAD)
-    this._router.post('/api/remove' , this._API_REMOVE)
-    this._router.get('/:bucket/*' , this._MEDIA)
+    this._router.get('/' , this._default)
+    this._router.get('/benchmark',this._benchmark)
+    this._router.post('/api/connect' , this._APIConnect)
+    this._router.post('/api/storage' , this._APIStorage)
+    this._router.post('/api/file' , this._APIFile)
+    this._router.post('/api/base64' , this._APIBase64)
+    this._router.post('/api/stream' , this._APIStream)
+    this._router.post('/api/upload' , this._APIUpload)
+    this._router.post('/api/upload/base64' , this._APIUploadBase64)
+    this._router.post('/api/remove' , this._APIRemove)
+    this._router.get('/:bucket/*' , this._media)
 
     this._app.useRouter(this._router)
 
@@ -82,35 +176,17 @@ class NfsServer {
     this._app.listen(port, ({ port , server }) => cb == null ? null : cb({ port , server }))
   }
 
-  fileExpired (seconds  : number) {
-    this._fileExpired = seconds 
-    return this
-  }
-
-  onCredentials (callback : ({ token , secret , bucket } : { token : string; secret : string; bucket : string}) => Promise<boolean>) {
-
-    this._credentials = callback
-
-    return this
-
-  } 
-
-  credentials ({ expired , secret } : { expired : number , secret : string}) {
-
-    this._JWT_EXPRIRES = expired
-
-    this._JWT_SECRET = secret
-
-    return this
-  }
-
-  private _DEFAULT = async ({ res } : TContext) => {
+  private _default = async ({ res } : TContext) => {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html');
-    return res.end(this._HTML == null ? html : String(this._HTML));
+    return res.end(this._html == null ? html : String(this._html));
+  }
+
+  private _benchmark = () => {
+    return 'benchmark in nfs server'
   }
   
-  private _MEDIA = async ({ req , res , query , params} : TContext) => {
+  private _media = async ({ req , res , query , params} : TContext) => {
       try {
 
         const { 
@@ -208,7 +284,7 @@ class NfsServer {
     }
   }
 
-  private _API_FILE =  async ({ res , body , headers } : TContext) => {
+  private _APIFile =  async ({ res , body , headers } : TContext) => {
     try {
   
       const authorization = String(headers.authorization).split(' ')[1];
@@ -254,7 +330,7 @@ class NfsServer {
     }
   }
 
-  private _API_BASE64 =  async ({ res , body , headers } : TContext) => {
+  private _APIBase64 =  async ({ res , body , headers } : TContext) => {
     try {
   
       const { path : filename } = body
@@ -288,7 +364,7 @@ class NfsServer {
     }
   }
 
-  private _API_STREAM = async ({ req , res , body , headers } : TContext) => {
+  private _APIStream = async ({ req , res , body , headers } : TContext) => {
 
     const { path : filename , range } = body
 
@@ -338,7 +414,7 @@ class NfsServer {
     return fsSystem.createReadStream(dir).pipe(res);
   }
 
-  private _API_STORAGE =  async ({ res , body , headers } : TContext) => {
+  private _APIStorage =  async ({ res , body , headers } : TContext) => {
     try {
   
       const authorization = String(headers.authorization).split(' ')[1];
@@ -387,7 +463,7 @@ class NfsServer {
     }
   }
 
-  private _API_UPLOAD = async ({ res , files , body , headers } : TContext) => {
+  private _APIUpload = async ({ res , files , body , headers } : TContext) => {
   
     const authorization = String(headers.authorization).split(' ')[1];
 
@@ -401,12 +477,16 @@ class NfsServer {
 
     const file = files?.file[0]
 
-    const { folder } = body
-  
     if (file == null) {
       return res.status(400).json({
-        message : 'No file were uploaded.'
+        message : 'The file is required.'
       })
+    }
+
+    let { folder } = body
+  
+    if(folder != null) {
+      folder = String(folder).replace(/[^a-z0-9_\- ]+/g, '')
     }
 
     const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
@@ -431,10 +511,63 @@ class NfsServer {
 
     await writeFile(file.tempFilePath , PathSystem.join(PathSystem.resolve(),`${fullDirectory}/${file.name}`))
 
-    return res.ok()
+    return res.ok({
+      path : folder ? `${folder}/${file.name}` : file.name,
+      name : file.name,
+      size : file.size
+    })
   }
 
-  private _API_REMOVE =  async ({ res , body , headers } : TContext) => {
+  private _APIUploadBase64 = async ({ res , files , body , headers } : TContext) => {
+  
+    const authorization = String(headers.authorization).split(' ')[1];
+
+    if(authorization == null) {
+      return res.status(401).json({
+        message : 'Please check your credentials. Are they valid ?'
+      })
+    }
+
+    const { bucket } = this._verify(authorization)
+
+    const { folder , base64 , name } = body
+
+    if(base64 === '' || base64 == null) {
+      return res.status(400).json({
+        message : 'The base64 is required.'
+      })
+    }
+
+    if(name === '' || name == null) {
+      return res.status(400).json({
+        message : 'The name is required.'
+      })
+    }
+  
+    const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
+
+    if (!fsSystem.existsSync(fullDirectory)) {
+      fsSystem.mkdirSync(fullDirectory, {
+        recursive: true
+      })
+    }
+
+    const writeFile = (base64 : string , to : string) => {
+      return fsSystem.writeFileSync(to, String(base64), 'base64')
+    }
+
+    const to = PathSystem.join(PathSystem.resolve(),`${fullDirectory}/${name}`)
+
+    writeFile(String(base64), to )
+
+    return res.ok({
+      path : folder ? `${folder}/${name}` : name,
+      name : name,
+      size : fsSystem.statSync(to).size
+    })
+  }
+
+  private _APIRemove =  async ({ res , body , headers } : TContext) => {
     try {
   
       const authorization = String(headers.authorization).split(' ')[1];
@@ -471,7 +604,7 @@ class NfsServer {
     }
   }
 
-  private _API_CONNECT = async ({ res , body } : TContext) => {
+  private _APIConnect = async ({ res , body } : TContext) => {
   
     const { token , secret , bucket } = body
 
@@ -498,7 +631,7 @@ class NfsServer {
             token
           }
         }
-      }, this._JWT_SECRET , { expiresIn : this._JWT_EXPRIRES , algorithm : 'HS256'})
+      }, this._jwtSecret , { expiresIn : this._jwtExipred , algorithm : 'HS256'})
     })
   }
   
@@ -624,7 +757,7 @@ class NfsServer {
       }
   
       return {
-        stream :fsSystem.createReadStream(directory , { highWaterMark : 1024 * 1024 }),
+        stream :fsSystem.createReadStream(directory),
         header,
         set : set(header,filePath)
       }
@@ -636,7 +769,7 @@ class NfsServer {
   
     const chunksize = (end - start) + 1
   
-    const stream = fsSystem.createReadStream(directory , {start, end , highWaterMark : 1024 * 1024 })
+    const stream = fsSystem.createReadStream(directory , { start, end })
   
     const header = {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -653,9 +786,10 @@ class NfsServer {
   }
 
   private _verify = (token : string) => {
+
     try {
-      
-      const decoded : any = jwt.verify(token, this._JWT_SECRET)
+     
+      const decoded : any = jwt.verify(token, this._jwtSecret)
   
       return decoded.data.sub as {
         token : string
@@ -665,7 +799,7 @@ class NfsServer {
     } catch (err:any) {
 
         let message = err.message
-        
+
         if (err.name === 'JsonWebTokenError') {
           message = 'Invalid credentials'
         } 
@@ -675,6 +809,7 @@ class NfsServer {
         } 
 
         const error:any = new Error(message)
+
         error.statusCode = 400
               
         throw error      

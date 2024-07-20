@@ -1,8 +1,34 @@
-import EventEmitter     from 'events'
-import axios            from 'axios'
-import FormData         from 'form-data'
-import fs               from 'fs'
+import EventEmitter   from 'events'
+import axios          from 'axios'
+import FormData       from 'form-data'
+import fsSystem       from 'fs'
 
+/**
+ * 
+ * The 'NfsClient' class is a client for nfs server
+ * @example
+ *   import { NfsClient } from "tspace-nfs";
+ *
+ *   const nfs = new NfsClient({
+ *      token     : '<YOUR TOKEN>',   // token
+ *      secret    : '<YOUR SECRET>',  // secret
+ *      bucket    : '<YOUR BUCKET>',  // bucket name
+ *      url       : '<YOUR URL>'      // https://nfs-server.example.com
+ *   })
+ *   .onError((err, nfs) => {
+ *      console.log('nfs client failed to connect')
+ *      console.log(err.message)
+ *      nfs.quit()
+ *   })
+ *   .onConnect((nfs) => {
+ *      console.log('nfs client connected')
+ *   })
+ * 
+ *   const mycat = 'my-cat.png'
+ *   const url   = await nfs.toURL(mycat)
+ * 
+ *   console.log(url)
+ */
 class NfsClient {
     private _event                      = new EventEmitter()
     private _authorization              = ''
@@ -14,7 +40,8 @@ class NfsClient {
     private _ENDPOINT_FILE_BASE64       = 'base64'
     private _ENDPOINT_FILE_STREAM       = 'stream'
     private _ENDPOINT_STORAGE           = 'storage'
-    private _TOKEN_EXPIRED_MESSAGE      = 'jwt expired'
+    private _ENDPOINT_UPLOAD_BASE64     = 'upload/base64'
+    private _TOKEN_EXPIRED_MESSAGE      = 'Token has expired'
 
     private _credentials = {
         token : '',
@@ -40,243 +67,309 @@ class NfsClient {
         this._getConnect(this._credentials)
     }
 
-    onError (callback : (err : any , nfs : NfsClient) => void) {
+    /**
+     * The 'onError' method is used to handle the error that occurs when trying connect to nfs server
+     * 
+     * @param {Function} callback 
+     * @returns {this} 
+     */
+    onError (callback : (err : any , nfs : NfsClient) => void): this {
         this._event.on('error' , callback)
         return this
     }
 
-    onConnect (callback : (nfs : NfsClient) => void) {
+    /**
+     * The 'onConnect' method is used cheke the connection to nfs server
+     * 
+     * @param {Function} callback 
+     * @returns {this} 
+     */
+    onConnect (callback : (nfs : NfsClient) => void): this {
         this._event.on('connected' , callback)
         return this
     }
 
-    quit () {
+    /**
+     * The 'quit' method is used quit the connection and stop the serivce
+     * 
+     * @return {never}
+     */
+    quit () : never {
         return process.exit(0)
     }
 
-    async toURL (path : string , { download = true } = {}) : Promise<string> {
-       try {
+    /**
+     * The 'toURL' method is used to converts a given file path to a URL
+     * 
+     * @param    {string}   path 
+     * @param    {object}   options
+     * @property {boolean}  options.download
+     * @return   {promise<string>} 
+     */
+    async toURL (path : string , { download = true } : { download?: boolean } = {}) : Promise<string> {
+
+        try {
+
             const url = this._URL(this._ENDPOINT_FILE)
 
-            const response = await axios({
+            const response = await this._fetch({
                 url,
-                method : 'POST',
                 data : { 
                     path,
                     download
-                },
-                headers : {
-                    authorization : `Bearer ${this._authorization}`
                 }
             })
 
             return `${this._url}/${response.data?.endpoint}`
 
-       } catch (err : any) {
+        } catch (err) {
 
-            const message  = err.response?.data?.message || err.message
-
-            if(message === this._TOKEN_EXPIRED_MESSAGE) {
-
-                await this._retryConnect()
-
-                return await this.toURL(path)
-            }
-
-            throw new Error(message)
-       }
+            return await this._retryConnect(err, async () => {
+                return await this.toURL(path , { download })
+            })
+        }
     }
 
+    /**
+     * The 'toBase64' method is used to converts a given file path to base64 encoded
+     * 
+     * @param    {string}   path 
+     * @return   {promise<string>} 
+     */
     async toBase64 (path : string) : Promise<string> {
+
         try {
-             const url = this._URL(this._ENDPOINT_FILE_BASE64)
+
+            const url = this._URL(this._ENDPOINT_FILE_BASE64)
  
-             const response = await axios({
+            const response = await this._fetch({
                 url,
-                method : 'POST',
                 data : { 
                     path 
-                },
-                headers : {
-                    authorization : `Bearer ${this._authorization}`
                 }
             })
 
-            return response.data?.base64
- 
-        } catch (err : any) {
- 
-             const message  = err.response?.data?.message || err.message
- 
-             if(message === this._TOKEN_EXPIRED_MESSAGE) {
- 
-                 await this._retryConnect()
- 
-                 return await this.toURL(path)
-             }
- 
-             throw new Error(message)
+            return response.data?.base64 ?? ''
+
+        } catch (err) {
+            return await this._retryConnect(err, async () => {
+                return await this.toBase64(path)
+            })
         }
     }
 
+    /**
+     * The 'toStream' method is used to converts a given file path to stream format
+     * 
+     * @param    {string}   path 
+     * @param    {string?}   range
+     * @return   {promise<string>} 
+     */
     async toStream (path : string , range?: string) : Promise<any> {
         try {
-             const url = this._URL(this._ENDPOINT_FILE_STREAM)
+
+            const url = this._URL(this._ENDPOINT_FILE_STREAM)
  
-             const response = await axios({
-                method: 'post',
+            const response = await this._fetch({
                 url,
-                headers : {
-                    authorization : `Bearer ${this._authorization}`,
-                },
                 data : { path , range },
-                responseType: 'stream',
-            });
+                type : 'stream'
+            })
 
             return response.data
- 
-        } catch (err : any) {
- 
-             const message  = err.response?.data?.message || err.message
- 
-             if(message === this._TOKEN_EXPIRED_MESSAGE) {
- 
-                 await this._retryConnect()
- 
-                 return await this.toStream(path)
-             }
-             
-             throw new Error(message)
+
+        } catch (err) {
+
+            return await this._retryConnect(err, async () => {
+                return await this.toStream(path , range)
+            })
         }
     }
 
-    async upload ({ directory , name , folder } : {
-        directory : string,
+    /**
+     * The 'upload' method is used uploading file
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.file
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @return   {promise<{size : number , path : string , name : string}>} 
+     */
+    async upload ({ file , name , folder } : {
+        file      : string,
         name      : string,
         folder    ?: string
-    }) : Promise<void> {
+    }) : Promise<{ size : number , path : string , name : string }> {
 
         try {
 
             const url = this._URL(this._ENDPOINT_UPLOAD)
 
-            const data = new FormData();
+            const data = new FormData()
 
-            data.append('file', fs.createReadStream(directory), name)
+            data.append('file', fsSystem.createReadStream(file), name)
 
             data.append('folder', folder == null ? '' : folder)
         
-            await axios({
-                method: 'POST',
-                maxBodyLength: Infinity,
+            const response = await this._fetch({
                 url,
-                headers: { 
-                    authorization : `bearer ${this._authorization}`, 
-                    ...data.getHeaders()
-                },
-                data : data
+                data,
+                type : 'form-data'
             })
 
-            return 
+            return {
+                url : await this.toURL(response.data?.path),
+                ...response.data,
+            }
 
         } catch (err : any) {
 
-            const message  = err.response?.data?.message || err.message
- 
-            if(message === this._TOKEN_EXPIRED_MESSAGE) {
-
-                await this._retryConnect()
-
-                return await this.upload({ directory , name , folder })
-            }
-
-            throw new Error(err.response?.data?.message || err.message)
+            return await this._retryConnect(err, async () => {
+                return await this.upload({
+                    file,
+                    name,
+                    folder
+                })
+            })
         }
     }
 
-    async delete (directory : string ) : Promise<void> {
+    /**
+     * The 'upload' method is used uploading file with base64 encoded
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.base64
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @return   {promise<{size : number , path : string , name : string}>} 
+     */
+    async uploadBase64 ({ base64 , name , folder } : {
+        base64    : string,
+        name      : string,
+        folder    ?: string
+    }) : Promise<{ size : number , path : string , name : string}> {
+
+        try {
+
+            const url = this._URL(this._ENDPOINT_UPLOAD_BASE64)
+
+            const response = await this._fetch({
+                url,
+                data : {
+                    base64,
+                    folder,
+                    name
+                }
+            })
+
+            return {
+                url : await this.toURL(response.data?.path),
+                ...response.data,
+            }
+
+        } catch (err) {
+
+            return await this._retryConnect(err, async () => {
+                return await this.uploadBase64({
+                    base64,
+                    name,
+                    folder
+                })
+            })
+        }
+    }
+
+    /**
+     * The 'delete' method is used to delete a file
+     * 
+     * @param    {string}   path 
+     * @return   {promise<string>} 
+     */
+    async delete (path : string ) : Promise<void> {
 
         try {
 
             const url = this._URL(this._ENDPOINT_REMOVE)
 
-            await axios({
-                method: 'POST',
+            await this._fetch({
                 url,
-                headers: { 
-                    authorization : `bearer ${this._authorization}`
-                },
                 data : {
-                    path: directory
+                    path
                 }
             })
 
-            return 
+            return
 
-        } catch (err : any) {
+        } catch (err) {
 
-            const message  = err.response?.data?.message || err.message
- 
-            if(message === this._TOKEN_EXPIRED_MESSAGE) {
-
-                await this._retryConnect()
-
-                return await this.delete(directory)
-            }
-
-            throw new Error(err.response?.data?.message || err.message)
+            return await this._retryConnect(err, async () => {
+                return await this.delete(path)
+            })
         }
     }
 
+    /**
+     * The 'storage' method is used to get information about the storage
+     * 
+     * @param    {string?}  folder
+     * @return   {Promise<{name : string , size : number }[]>} 
+     */
     async storage (folder ?: string ) : Promise<{name : string , size : number }[]> {
 
-        try {
+       try {
 
-            const url = this._URL(this._ENDPOINT_STORAGE)
+        const url = this._URL(this._ENDPOINT_STORAGE)
 
-            const response = await axios({
-                url,
-                data : {
-                    folder
-                },
-                method : 'POST',
-                headers : {
-                    authorization : `Bearer ${this._authorization}`
-                }
-            })
-
-            return response.data?.storage ?? []
-
-        } catch (err : any) {
-
-            const message  = err.response?.data?.message || err.message
- 
-            if(message === this._TOKEN_EXPIRED_MESSAGE) {
-
-                await this._retryConnect()
-
-                return await this.storage(folder)
-            }
-
-            throw new Error(err.response?.data?.message || err.message)
-        }
-    }
-
-    private async _retryConnect() {
-        
-        const response = await axios.request({
-            url : this._URL(this._ENDPOINT_CONNECT),
-            data : { 
-                ...this._credentials
+        const response = await this._fetch({
+            url,
+            data : {
+                folder
             }
         })
 
-        this._authorization = response.data?.accessToken
+        return response.data?.storage ?? []
 
-        return
+       } catch (err) {
+            return await this._retryConnect(err, async () => {
+                return await this.storage(folder)
+            })
+       }
     }
 
-    private _URL (endpoint : string) {
+    private async _fetch ({ url , data , type , method } : { 
+        url : string , 
+        data : any, 
+        type ?: 'form-data' | 'stream'
+        method ?: string 
+    }) : Promise<any> {
+
+        let headers = {
+            authorization : `Bearer ${this._authorization}`
+        }
+
+        if(type === 'form-data') {
+            headers = {
+                ...headers,
+                ...data.getHeaders()
+            }
+        }
+
+        const configs : Record<string,any> = {
+            url,
+            data,
+            headers,
+            method : method == null ? 'POST' : method,
+            maxBodyLength: Infinity,
+        }
+
+        if(type === 'stream') {
+            configs['responseType'] = 'stream'
+        }
+
+        return await axios(configs)
+    }
+
+    private _URL (endpoint : string) : string {
 
         return `${this._url}/api/${endpoint}`
     }
@@ -285,20 +378,58 @@ class NfsClient {
         token,
         secret,
         bucket
-    } : { token : string; secret : string; bucket : string}) {
+    } : { token : string; secret : string; bucket : string}) : void {
 
-        axios.post(this._URL(this._ENDPOINT_CONNECT), { 
+        const url = this._URL(this._ENDPOINT_CONNECT)
+
+        axios.post(url, { 
             token,
             secret,
             bucket
         })
         .then((response: { data: { accessToken: any } }) => {
-            this._event.emit('connected' , this)
             this._authorization = response.data?.accessToken
+            this._event.emit('connected' , this)
         })
         .catch((err: any) => {
             this._event.emit('error', err.response?.data ?? err , this)
         })
+
+        return
+    }
+
+    private async _retryConnect (err : any ,fn : Function) {
+
+        const message  = err.response?.data?.message || err.message
+
+        if(message !== this._TOKEN_EXPIRED_MESSAGE) {
+            if(message.includes('connect ECONNREFUSED')) {
+                throw new Error('Cannot connect to the NFS server. Please try again later.')
+            }
+            throw new Error(message) 
+        }
+
+        try {
+
+            const response = await axios({
+                url : this._URL(this._ENDPOINT_CONNECT),
+                data : { 
+                    ...this._credentials
+                },
+                method : 'POST'
+            })
+            
+            this._authorization = response.data?.accessToken
+    
+            return await fn()
+
+        } catch (err : any) {
+
+            const message  = err.response?.data?.message || err.message
+
+            throw new Error(message)
+        }
+    
     }
 }
 

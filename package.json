@@ -1,6 +1,6 @@
 {
   "name": "tspace-nfs",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "tspace-nfs is a Network File System (NFS) and provides both server and client capabilities for accessing files over a network.",
   "main": "./build/lib/index.js",
   "types": "./build/lib/index.d.ts",
@@ -26,17 +26,18 @@
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
+    "release" : "npm run build && npm publish",
     "start:client": "ts-node test/client.ts",
     "start:server": "ts-node test/server.ts",
     "test": "ts-node src/tests/client.test.ts"
   },
   "dependencies": {
-    "axios": "^1.7.2",
-    "bcrypt": "^5.1.1",
-    "jsonwebtoken": "^9.0.2",
-    "tspace-spear": "^1.0.1",
-    "tspace-utils": "^1.0.4",
-    "xml": "^1.0.1"
+    "axios": "1.7.2",
+    "bcrypt": "5.1.1",
+    "jsonwebtoken": "9.0.2",
+    "tspace-spear": "1.0.6",
+    "tspace-utils": "1.0.4",
+    "xml": "1.0.1"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
