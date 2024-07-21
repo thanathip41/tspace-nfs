@@ -2,12 +2,16 @@ import EventEmitter   from 'events'
 import axios          from 'axios'
 import FormData       from 'form-data'
 import fsSystem       from 'fs'
+import http           from 'http'
+import https          from 'https'
 
 /**
  * 
  * The 'NfsClient' class is a client for nfs server
  * @example
- *   import { NfsClient } from "tspace-nfs";
+ * import { NfsClient } from "tspace-nfs";
+ * import PathSystem from 'path';
+ * import pathSystem from 'path';
  *
  *   const nfs = new NfsClient({
  *      token     : '<YOUR TOKEN>',   // token
@@ -24,7 +28,7 @@ import fsSystem       from 'fs'
  *      console.log('nfs client connected')
  *   })
  * 
- *   const mycat = 'my-cat.png'
+ *   const mycat = 'cats/my-cat.png'
  *   const url   = await nfs.toURL(mycat)
  * 
  *   console.log(url)
@@ -35,6 +39,7 @@ class NfsClient {
     private _url                        = 'http://localhost:8000'
     private _ENDPOINT_CONNECT           = 'connect'
     private _ENDPOINT_UPLOAD            = 'upload'
+    private _ENDPOINT_MERGE             = 'merge'
     private _ENDPOINT_REMOVE            = 'remove'
     private _ENDPOINT_FILE              = 'file'
     private _ENDPOINT_FILE_BASE64       = 'base64'
@@ -187,54 +192,6 @@ class NfsClient {
     }
 
     /**
-     * The 'upload' method is used uploading file
-     * 
-     * @param    {object}  obj
-     * @property {string}  obj.file
-     * @property {string}  obj.name
-     * @property {string?} obj.folder
-     * @return   {promise<{size : number , path : string , name : string}>} 
-     */
-    async upload ({ file , name , folder } : {
-        file      : string,
-        name      : string,
-        folder    ?: string
-    }) : Promise<{ size : number , path : string , name : string }> {
-
-        try {
-
-            const url = this._URL(this._ENDPOINT_UPLOAD)
-
-            const data = new FormData()
-
-            data.append('file', fsSystem.createReadStream(file), name)
-
-            data.append('folder', folder == null ? '' : folder)
-        
-            const response = await this._fetch({
-                url,
-                data,
-                type : 'form-data'
-            })
-
-            return {
-                url : await this.toURL(response.data?.path),
-                ...response.data,
-            }
-
-        } catch (err : any) {
-
-            return await this._retryConnect(err, async () => {
-                return await this.upload({
-                    file,
-                    name,
-                    folder
-                })
-            })
-        }
-    }
-
-    /**
      * The 'upload' method is used uploading file with base64 encoded
      * 
      * @param    {object}  obj
@@ -276,6 +233,101 @@ class NfsClient {
                     folder
                 })
             })
+        }
+    }
+
+    /**
+     * The 'upload' method is used uploading file
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.file
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @property {number?} obj.chunkSize // mb size
+     * @return   {promise<{size : number , path : string , name : string}>} 
+     */
+    async upload ({ file , name , folder , chunkSize } : {
+        file      : string,
+        name      : string,
+        folder    ?: string
+        chunkSize ?: number
+    }) : Promise<{ size : number , path : string , name : string }> {
+
+        const CHUNK_SIZE = 1024 * 1024 * (chunkSize == null ? 200 : chunkSize)
+        const stats = fsSystem.statSync(file)
+        const fileSize = stats.size;
+        const totalParts = Math.ceil(fileSize / CHUNK_SIZE)
+    
+        const fileStream = fsSystem.createReadStream(file, {
+            highWaterMark: CHUNK_SIZE,
+        })
+    
+        let partNumber = 0;
+
+        const files : string[] = []
+    
+        for await (const chunk of fileStream) {
+
+            partNumber++
+
+            const fileId = Math.random().toString(36).substring(2, 12).replace(/\./g,'')
+
+            const form = new FormData()
+
+            const fileName = `${name.split('.')[0]}_${fileId}@${`0${partNumber}`.slice(0,2)}`
+
+            form.append('file', chunk, fileName)
+
+            form.append('folder', folder == null ? '' : folder)
+
+            const url = this._URL(this._ENDPOINT_UPLOAD)
+
+            const response = await this._fetch({
+                url,
+                data : form,
+                type : 'form-data'
+            })
+            .catch(_ => null)
+
+            if(response == null) break
+
+            files.push(fileName)
+        }
+
+        if(totalParts !== files.length) {
+
+            for(const file of files) {
+                const path = folder == null ? file : `${folder}/${file}`
+                await this.delete(path).catch(_ => null)
+            }
+
+            throw new Error('Could not upload files. Please verify your file and try again.')
+        }
+
+        try {
+
+            const response = await this._fetch({
+                url : this._URL(this._ENDPOINT_MERGE),
+                data : {
+                    folder,
+                    name,
+                    paths : files
+                }
+            })
+    
+            return {
+                url : await this.toURL(response.data?.path),
+                ...response.data,
+            }
+
+        } catch (err) {
+
+            for(const file of files) {
+                const path = folder == null ? file : `${folder}/${file}`
+                await this.delete(path).catch(_ => null)
+            }
+
+            throw err
         }
     }
 
@@ -344,7 +396,8 @@ class NfsClient {
     }) : Promise<any> {
 
         let headers = {
-            authorization : `Bearer ${this._authorization}`
+            authorization : `Bearer ${this._authorization}`,
+            Connection: 'keep-alive'
         }
 
         if(type === 'form-data') {
@@ -360,6 +413,18 @@ class NfsClient {
             headers,
             method : method == null ? 'POST' : method,
             maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+            httpAgent : new http.Agent({
+                keepAlive: true,
+                timeout : 0,
+                
+            }),
+            httpsAgent: new https.Agent({
+                keepAlive: true,
+                rejectUnauthorized: false,
+                timeout : 0
+            }),
+            timeout : 0
         }
 
         if(type === 'stream') {
