@@ -287,7 +287,10 @@ class NfsClient {
                 data : form,
                 type : 'form-data'
             })
-            .catch(_ => null)
+            .catch(err => {
+                console.log(err)
+                return null
+            })
 
             if(response == null) break
 

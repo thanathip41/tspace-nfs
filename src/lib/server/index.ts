@@ -844,7 +844,7 @@ class NfsServer {
     }
   }
 
-  private _authMiddleware ({ req, res , headers } : TContext , next : TNextFunction) {
+  private _authMiddleware = ({ req, res , headers } : TContext , next : TNextFunction) => {
 
     const authorization = String(headers.authorization).split(' ')[1];
 
