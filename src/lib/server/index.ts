@@ -131,7 +131,7 @@ class NfsServer {
     })
 
     this._app.useLogger({
-      exceptPath  : /^(?!\/(benchmark|favicon\.ico)$).*/
+      exceptPath  : /\/benchmark(\/|$)|\/favicon\.ico(\/|$)/
     })
 
     this._app.useBodyParser()
@@ -141,35 +141,37 @@ class NfsServer {
       tempFileDir : 'tmp',
       removeTempFile : {
         remove : true,
-        ms : 1000 * 60 * 2
+        ms : 1000 * 60 * 5
       }
     })
 
     this._router = new Router()
 
     this._router.get('/' , this._default)
-    this._router.get('/:bucket/*' , this._media)
+   
     this._router.get('/benchmark',this._benchmark)
 
     this._router.groups('/api' , (router) => {
-      router.post('/connect', this._APIConnect)
-      router.post('/storage', this._authMiddleware ,this._APIStorage)
-      router.post('/file',    this._authMiddleware , this._APIFile)
-      router.post('/base64',  this._authMiddleware ,this._APIBase64)
-      router.post('/stream',  this._authMiddleware ,this._APIStream)
-      router.post('/upload',  this._authMiddleware ,this._APIUpload)
-      router.post('/merge',   this._authMiddleware ,this._APIMerge)
-      router.post('/remove',  this._authMiddleware ,this._APIRemove)
-      router.post('/upload/base64' , this._authMiddleware ,this._APIUploadBase64)
+      router.post('/connect', this._API_Connect)
+      router.post('/storage', this._authMiddleware ,this._API_Storage)
+      router.post('/file',    this._authMiddleware , this._API_File)
+      router.post('/folders', this._authMiddleware , this._API_Folders)
+      router.post('/base64',  this._authMiddleware ,this._API_Base64)
+      router.post('/stream',  this._authMiddleware ,this._API_Stream)
+      router.post('/remove',  this._authMiddleware ,this._API_Remove)
+      router.post('/upload',  this._authMiddleware ,this._API_Upload)
+      router.post('/upload/merge',   this._authMiddleware ,this._API_Merge)
+      router.post('/upload/base64' , this._authMiddleware ,this._API_UploadBase64)
 
       return router
     })
-   
-    
+
+    this._router.get('/:bucket/*' , this._media)
+  
     this._app.useRouter(this._router)
 
     this._app.notFoundHandler(({  req , res }) => {
-      res.setHeader('Content-Type', 'text/xml')
+      res.writeHead(400 , { 'Content-Type': 'text/xml'})
         const error = {
             Error : [
                 { Code : 'Not found' },
@@ -182,9 +184,6 @@ class NfsServer {
     })
     
     this._app.listen(port, ({ port , server }) => {
-      server.timeout = 0
-      server.keepAliveTimeout = 0
-      server.headersTimeout = 0
       return cb == null ? null : cb({ port , server })
     })
   }
@@ -219,8 +218,7 @@ class NfsServer {
         if([
           key , expires , signature , download , bucket
         ].some(v => v === '' || v == null)) {
-
-          res.setHeader('Content-Type', 'text/xml')
+          res.writeHead(400 , { 'Content-Type': 'text/xml'})
           const error = {
               Error : [
                   { Code : 'Bad request' },
@@ -297,7 +295,7 @@ class NfsServer {
     }
   }
 
-  private _APIFile =  async ({ req , res , body } : TContext) => {
+  private _API_File =  async ({ req , res , body } : TContext) => {
     try {
   
       const { bucket , token } = req
@@ -306,9 +304,11 @@ class NfsServer {
 
       const fileName = `${path}`.replace(/^\/+/, '')
       
-      const dir = pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${fileName}`)
-  
-      if(!fsSystem.existsSync(dir)) {
+      const directory = this._normalizeDirectory({ bucket , folder : null })
+
+      const fullPath = this._normalizePath({ directory , path : String(path) , full : true })
+     
+      if(!fsSystem.existsSync(fullPath)) {
         return res.status(404).json({
           message : `No such directory or file, '${fileName}'`
         })
@@ -335,23 +335,25 @@ class NfsServer {
     }
   }
 
-  private _APIBase64 =  async ({  req, res , body } : TContext) => {
+  private _API_Base64 =  async ({  req, res , body } : TContext) => {
     try {
   
       const { bucket } = req
 
       const { path : filename } = body
 
-      const dir = pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
+      const directory = this._normalizeDirectory({ bucket , folder : null })
+
+      const path = this._normalizePath({ directory , path : String(filename) , full : true})
   
-      if(!fsSystem.existsSync(dir)) {
+      if(!fsSystem.existsSync(path)) {
         return res.status(404).json({
           message : `no such file or directory, '${filename}'`
         })
       }
   
       return res.json({
-        base64 : fsSystem.readFileSync(dir, 'base64')
+        base64 : fsSystem.readFileSync(path, 'base64')
       })
   
     } catch (err : any) {
@@ -361,14 +363,16 @@ class NfsServer {
     }
   }
 
-  private _APIStream = async ({ req , res , body } : TContext) => {
+  private _API_Stream = async ({ req , res , body } : TContext) => {
 
     const { bucket } = req
 
     const { path : filename , range } = body
- 
-    const fullPath = pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${filename}`)
 
+    const directory = this._normalizeDirectory({ bucket , folder : null })
+
+    const fullPath = this._normalizePath({ directory , path : String(filename) , full : true})
+    
     if(!fsSystem.existsSync(fullPath)) {
       return res.status(404).json({
         message : `no such file or directory, '${filename}'`
@@ -403,19 +407,18 @@ class NfsServer {
     return fsSystem.createReadStream(fullPath).pipe(res);
   }
 
-  private _APIStorage =  async ({ req, res , body } : TContext) => {
+  private _API_Storage =  async ({ req, res , body } : TContext) => {
     try {
   
       const { bucket } = req
 
-      const { folder } = body
+      let { folder } = body
+
+      if(folder != null) {
+        folder = this._normalizeFolder(String(folder))
+      }
    
-      const directory = pathSystem.join(
-        pathSystem.resolve(), 
-        folder == null 
-          ? `${this._rootFolder}/${bucket}` 
-          : `${this._rootFolder}/${bucket}/${folder}`
-      )
+      const directory = this._normalizeDirectory({ bucket , folder })
 
       if(!fsSystem.existsSync(directory)) {
         return res.status(404).json({
@@ -444,7 +447,28 @@ class NfsServer {
     }
   }
 
-  private _APIUpload = async ({ req , res , files , body } : TContext) => {
+  private _API_Folders =  async ({ req, res } : TContext) => {
+
+    try {
+  
+      const { bucket } = req
+
+      const directory = this._normalizeDirectory({ bucket , folder : null })
+
+      const folders = fsSystem.readdirSync(directory)
+
+      return res.ok({
+        folders
+      })
+  
+    } catch (err : any) {
+      return res.status(500).json({
+        message : err.message
+      })
+    }
+  }
+
+  private _API_Upload = async ({ req , res , files , body } : TContext) => {
   
     const { bucket } = req
 
@@ -459,13 +483,13 @@ class NfsServer {
     let { folder } = body
   
     if(folder != null) {
-      folder = String(folder).replace(/^\/+/, '').replace(/[^a-z0-9_\- ]+/g, '')
+      folder = this._normalizeFolder(String(folder))
     }
 
-    const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
+    const directory = this._normalizeDirectory({ bucket , folder })
 
-    if (!fsSystem.existsSync(fullDirectory)) {
-      fsSystem.mkdirSync(fullDirectory, {
+    if (!fsSystem.existsSync(directory)) {
+      fsSystem.mkdirSync(directory, {
         recursive: true
       })
     }
@@ -482,16 +506,16 @@ class NfsServer {
       })
     }
 
-    await writeFile(file.tempFilePath , pathSystem.join(pathSystem.resolve(),`${fullDirectory}/${file.name}`))
+    await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
 
     return res.ok({
-      path : folder ? `${folder}/${file.name}` : file.name,
+      path : this._normalizePath({ directory : folder , path : file.name }),
       name : file.name,
       size : file.size
     })
   }
 
-  private _APIMerge = async ({ req , res , body } : TContext) => {
+  private _API_Merge = async ({ req , res , body } : TContext) => {
   
     const { bucket } = req
 
@@ -507,13 +531,13 @@ class NfsServer {
     }
 
     if(folder != null) {
-      folder = String(folder).replace(/^\/+/, '').replace(/[^a-z0-9_\- ]+/g, '')
+      folder = this._normalizeFolder(String(folder))
     }
 
-    const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
+    const directory = this._normalizeDirectory({ bucket , folder })
 
-    if (!fsSystem.existsSync(fullDirectory)) {
-      fsSystem.mkdirSync(fullDirectory, {
+    if (!fsSystem.existsSync(directory)) {
+      fsSystem.mkdirSync(directory, {
         recursive: true
       })
     }
@@ -524,7 +548,11 @@ class NfsServer {
 
         for(const path of paths) {
 
-          const partPath = pathSystem.join(pathSystem.resolve(),`${fullDirectory}/${path}`)
+          const partPath = this._normalizePath({
+            directory,
+            path,
+            full: true
+          })
 
           const data = fsSystem.readFileSync(partPath)
           
@@ -533,7 +561,7 @@ class NfsServer {
           fsSystem.unlinkSync(partPath)
         }
 
-        writeStream.on('errorx' , (err) => {
+        writeStream.on('error' , (err) => {
           return reject(err)
         })
 
@@ -543,25 +571,25 @@ class NfsServer {
       })
     }
 
-    const to = pathSystem.join(pathSystem.resolve(),`${fullDirectory}/${name}`)
-
+    const to = this._normalizePath({ directory , path : name , full : true })
+    
     await writeFile(to)
 
     return res.ok({
-      path : folder ? `${folder}/${name}` : name,
+      path : this._normalizePath({ directory : folder , path : name }),
       name : name,
       size : fsSystem.statSync(to).size
     })
   }
 
-  private _APIUploadBase64 = async ({ req, res, body  } : TContext) => {
+  private _API_UploadBase64 = async ({ req, res, body  } : TContext) => {
   
     const { bucket } = req
 
     let { folder , base64 , name } = body
 
     if(folder != null) {
-      folder = String(folder).replace(/^\/+/, '').replace(/[^a-z0-9_\- ]+/g, '')
+      folder = this._normalizeFolder(String(folder))
     }
 
     if(base64 === '' || base64 == null) {
@@ -576,10 +604,10 @@ class NfsServer {
       })
     }
   
-    const fullDirectory = folder ? `${this._rootFolder}/${bucket}/${folder}` : `${this._rootFolder}/${bucket}`
+    const directory = this._normalizeDirectory({ bucket , folder})
 
-    if (!fsSystem.existsSync(fullDirectory)) {
-      fsSystem.mkdirSync(fullDirectory, {
+    if (!fsSystem.existsSync(directory)) {
+      fsSystem.mkdirSync(directory, {
         recursive: true
       })
     }
@@ -588,7 +616,7 @@ class NfsServer {
       return fsSystem.writeFileSync(to, String(base64), 'base64')
     }
 
-    const to = pathSystem.join(pathSystem.resolve(),`${fullDirectory}/${name}`)
+    const to = pathSystem.join(pathSystem.resolve(),`${directory}/${name}`)
 
     writeFile(String(base64), to)
 
@@ -599,27 +627,29 @@ class NfsServer {
     })
   }
 
-  private _APIRemove =  async ({ req, res , body } : TContext) => {
+  private _API_Remove =  async ({ req, res , body } : TContext) => {
     try {
   
       const { bucket } = req
 
-      const { path } = body
+      const { path : p } = body
 
-      const fileName = `${path}`.replace(/^\/+/, '')
+      const filename = `${p}`.replace(/^\/+/, '')
+
+      const directory = this._normalizeDirectory({ bucket , folder : null })
       
-      const dir = pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${fileName}`)
-  
-      if(!fsSystem.existsSync(dir)) {
+      const path = this._normalizePath({ directory , path : filename , full : true})
+     
+      if(!fsSystem.existsSync(path)) {
         return res.status(404)
         .json({
-          message : `No such directory or file, '${fileName}'`
+          message : `No such directory or file, '${filename}'`
         })
       }
 
-      try { fsSystem.unlinkSync(dir) } catch (e) {}
+      try { fsSystem.unlinkSync(path) } catch (e) {}
   
-      return res.noContent()
+      return res.ok()
   
     } catch (err : any) {
       return res.status(500).json({
@@ -628,7 +658,7 @@ class NfsServer {
     }
   }
 
-  private _APIConnect = async ({ res , body } : TContext) => {
+  private _API_Connect = async ({ res , body } : TContext) => {
   
     const { token , secret , bucket } = body
 
@@ -734,13 +764,15 @@ class NfsServer {
         }
     }
 
-    const directory =  pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${filePath}`)
-  
+    const directory = this._normalizeDirectory({ bucket , folder : null})
+
+    const path =  this._normalizePath({ directory , path : filePath , full : true })
+ 
     const contentType = getContentType(String(filePath?.split('.')?.pop()))
   
-    const videoStat = fsSystem.statSync(directory)
+    const stat = fsSystem.statSync(path)
   
-    const fileSize = videoStat.size
+    const fileSize = stat.size
 
     const set = (header : Record<string,any> , filePath : string , code = 200 ) => {
   
@@ -772,7 +804,7 @@ class NfsServer {
       };
   
       return {
-        stream :fsSystem.createReadStream(directory),
+        stream :fsSystem.createReadStream(path),
         header,
         set : set(header,filePath)
       }
@@ -785,7 +817,7 @@ class NfsServer {
       }
   
       return {
-        stream :fsSystem.createReadStream(directory),
+        stream :fsSystem.createReadStream(path),
         header,
         set : set(header,filePath)
       }
@@ -797,7 +829,7 @@ class NfsServer {
   
     const chunksize = (end - start) + 1
   
-    const stream = fsSystem.createReadStream(directory , { start, end })
+    const stream = fsSystem.createReadStream(path , { start, end })
   
     const header = {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -872,6 +904,32 @@ class NfsServer {
 
     return [].concat(...files)
     
+  }
+
+  private _normalizeFolder(folder : string): string {
+    return folder.replace(/^\/+/, '').replace(/[.?#]/g, '')
+  }
+
+  private _normalizeDirectory({ bucket , folder } : { bucket : string , folder ?: string | null }): string {
+
+    return folder == null 
+      ? `${this._rootFolder}/${bucket}`
+      : `${this._rootFolder}/${bucket}/${this._normalizeFolder(folder)}` 
+  }
+
+  private _normalizePath({ directory , path , full = false } : { 
+    directory ?: string | null
+    path : string
+    full ?: boolean 
+  }): string {
+
+    return full 
+      ? directory == null 
+        ?  pathSystem.join(pathSystem.resolve(),`${path.replace(/^\/+/, '')}`)
+        :  pathSystem.join(pathSystem.resolve(),`${directory}/${path.replace(/^\/+/, '')}`)
+      : directory == null 
+        ? `${path.replace(/^\/+/, '')}`
+        : `${directory}/${path.replace(/^\/+/, '')}`
   }
 }
 

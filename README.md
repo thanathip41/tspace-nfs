@@ -89,6 +89,8 @@ const nfs = new NfsClient({
 
   const deleted = await nfs.delete(fileDirectory)
 
+  const folders = await nfs.folders()
+
   const storage = await nfs.storage()
 
 })()

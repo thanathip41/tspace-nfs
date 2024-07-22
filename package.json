@@ -1,6 +1,6 @@
 {
   "name": "tspace-nfs",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "tspace-nfs is a Network File System (NFS) and provides both server and client capabilities for accessing files over a network.",
   "main": "./build/lib/index.js",
   "types": "./build/lib/index.d.ts",
@@ -35,7 +35,7 @@
     "axios": "1.7.2",
     "bcrypt": "5.1.1",
     "jsonwebtoken": "9.0.2",
-    "tspace-spear": "1.0.6",
+    "tspace-spear": "1.0.8",
     "tspace-utils": "1.0.4",
     "xml": "1.0.1"
   },
