@@ -245,9 +245,9 @@ class NfsClient {
                 data : form,
                 type : 'form-data'
             })
-            .catch(err => null)
+            .catch(_ => 'fail to upload file')
 
-            if(response == null) break
+            if(response === 'fail to upload file') break
 
             files.push(fileName)
         }
@@ -425,10 +425,10 @@ class NfsClient {
         }
     }
 
-    private async _fetch ({ url , data , type , method } : { 
+    private async _fetch ({ url , data , type = 'json' , method } : { 
         url : string , 
         data : any, 
-        type ?: 'form-data' | 'stream'
+        type ?: 'form-data' | 'stream' | 'json'
         method ?: string 
     }) : Promise<any> {
 
@@ -466,11 +466,9 @@ class NfsClient {
                     maxSockets: 10,
                     maxFreeSockets: 5,
                 }),
-                timeout : 0
-            }
-    
-            if(type === 'stream') {
-                configs['responseType'] = 'stream'
+                timeout : 0,
+                maxRate : [ Infinity , Infinity],
+                responseType : type
             }
     
             return await axios(configs)

@@ -138,11 +138,7 @@ class NfsServer {
     
     this._app.useFileUpload({
       limit : Infinity,
-      tempFileDir : 'tmp',
-      removeTempFile : {
-        remove : true,
-        ms : 1000 * 60 * 5
-      }
+      tempFileDir : 'tmp'
     })
 
     this._router = new Router()
@@ -542,6 +538,8 @@ class NfsServer {
       })
     }
 
+    let sizes : number = 0
+
     const writeFile = (to : string) => {
       return new Promise((resolve, reject) => {
         const writeStream = fsSystem.createWriteStream(to)
@@ -555,10 +553,12 @@ class NfsServer {
           })
 
           const data = fsSystem.readFileSync(partPath)
+
+          sizes += (fsSystem.statSync(partPath).size) / (1024 * 1024)
           
           writeStream.write(data)
-          
-          fsSystem.unlinkSync(partPath)
+
+          try { fsSystem.unlinkSync(partPath) } catch (err) {}
         }
 
         writeStream.on('error' , (err) => {
@@ -566,6 +566,7 @@ class NfsServer {
         })
 
         writeStream.end(() => {
+         
           return resolve(null)
         })
       })
@@ -574,6 +575,10 @@ class NfsServer {
     const to = this._normalizePath({ directory , path : name , full : true })
     
     await writeFile(to)
+
+    await this._sleep(
+      (sizes / 1000) * 30
+    )
 
     return res.ok({
       path : this._normalizePath({ directory : folder , path : name }),
@@ -930,6 +935,11 @@ class NfsServer {
       : directory == null 
         ? `${path.replace(/^\/+/, '')}`
         : `${directory}/${path.replace(/^\/+/, '')}`
+  }
+
+  private async _sleep (seconds : number) {
+    seconds = seconds > 360 ? 360 : seconds
+    return await new Promise((resolve) => setTimeout(resolve, 1000 * seconds))
   }
 }
 
