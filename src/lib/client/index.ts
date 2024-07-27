@@ -269,7 +269,8 @@ class NfsClient {
                 data : {
                     folder,
                     name : this._normalizeFilename({ name , extension }),
-                    paths : files
+                    paths : files,
+                    totalSize : fileSize
                 }
             })
     

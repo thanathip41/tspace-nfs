@@ -10,7 +10,6 @@ import Spear , {
   TNextFunction
 } from 'tspace-spear'
 import html from './default-html'
-
 /**
  * The 'NfsServer' class is a created the server for nfs
  * 
@@ -31,13 +30,26 @@ class NfsServer {
   private _cluster        : boolean | number = false
   private _jwtExipred     : number = 60 * 60
   private _jwtSecret      : string = `<secret@${+new Date()}:${Math.floor(Math.random() * 9999)}>`
+  private _progress       : boolean = false
 
   get instance () {
     return this._app
   }
 
   /**
-   * The 'defaultPage' is method used to set default home page
+   * The 'progress' is method used to view the progress of the file upload.
+   * 
+   * @returns {this}
+   */
+  progress (): this {
+
+    this._progress = true
+
+    return this
+  }
+
+  /**
+   * The 'defaultPage' is method used to set default home page.
    * 
    * @param {string} html 
    * @returns {this}
@@ -138,7 +150,11 @@ class NfsServer {
     
     this._app.useFileUpload({
       limit : Infinity,
-      tempFileDir : 'tmp'
+      tempFileDir : 'tmp',
+      removeTempFile : {
+        remove : true,
+        ms : 1000 * 60 * 60 * 2
+      }
     })
 
     this._router = new Router()
@@ -167,16 +183,17 @@ class NfsServer {
     this._app.useRouter(this._router)
 
     this._app.notFoundHandler(({  req , res }) => {
-      res.writeHead(400 , { 'Content-Type': 'text/xml'})
-        const error = {
-            Error : [
-                { Code : 'Not found' },
-                { Message : 'The request was invalid'},
-                { Resource : req.url },
-            ]
-        }
+      res.writeHead(404 , { 'Content-Type': 'text/xml'})
 
-        return res.end(xml([error],{ declaration: true }))
+      const error = {
+          Error : [
+              { Code : 'Not found' },
+              { Message : 'The request was invalid'},
+              { Resource : req.url },
+          ]
+      }
+
+      return res.end(xml([error],{ declaration: true }))
     })
     
     this._app.listen(port, ({ port , server }) => {
@@ -185,16 +202,14 @@ class NfsServer {
   }
 
   private _default = async ({ res } : TContext) => {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/html');
-    return res.end(this._html == null ? html : String(this._html));
+    return res.html(this._html == null ? html : String(this._html));
   }
 
   private _benchmark = () => {
     return 'benchmark in nfs server'
   }
   
-  private _media = async ({ req , res , query , params} : TContext) => {
+  private _media = async ({ req , res , query , params } : TContext) => {
       try {
 
         const { 
@@ -495,6 +510,8 @@ class NfsServer {
         fsSystem.createReadStream(file, { encoding: 'base64' })
         .pipe(fsSystem.createWriteStream(to, { encoding: 'base64' }))
         .on('finish', () => {
+          this._remove(to)
+          this._remove(file,0)
           return resolve(null)
         })
         .on('error', (err) => reject(err));
@@ -518,12 +535,13 @@ class NfsServer {
     let { 
       folder, 
       name,
-      paths
+      paths,
+      totalSize
     } = body as {
       folder ?: string | null
       name : string
       paths : string[]
-      parts : number
+      totalSize : number
     }
 
     if(folder != null) {
@@ -538,47 +556,66 @@ class NfsServer {
       })
     }
 
-    let sizes : number = 0
+    const writeFile = async (to : string) => {
 
-    const writeFile = (to : string) => {
       return new Promise((resolve, reject) => {
-        const writeStream = fsSystem.createWriteStream(to)
 
-        for(const path of paths) {
+        const writeStream = fsSystem.createWriteStream(to , { flags : 'a' })
 
-          const partPath = this._normalizePath({
-            directory,
-            path,
-            full: true
-          })
-
-          const data = fsSystem.readFileSync(partPath)
-
-          sizes += (fsSystem.statSync(partPath).size) / (1024 * 1024)
-          
-          writeStream.write(data)
-
-          try { fsSystem.unlinkSync(partPath) } catch (err) {}
-        }
-
-        writeStream.on('error' , (err) => {
+        writeStream.on('error', (err) => {
           return reject(err)
         })
 
-        writeStream.end(() => {
-         
-          return resolve(null)
-        })
+        let processedSize = 0
+      
+        const next = (index : number = 0) => {
+
+          if (index >= paths.length) {
+            
+            writeStream.end()
+
+            writeStream.close()
+
+            return resolve(null)
+          }
+
+          const partPath = this._normalizePath({
+            directory,
+            path : paths[index],
+            full: true
+          })
+
+          const readStream = fsSystem.createReadStream(partPath , { 
+            highWaterMark : 1024 * 1024 * 50
+          })
+  
+          if(this._progress) {
+            readStream.on('data', (chunk : string) => {
+              processedSize += chunk.length
+              const progress = ((processedSize / totalSize) * 100).toFixed(2);
+              console.log(`The file '${pathSystem.basename(to)}' in progress: ${progress}%`)
+            })
+          }
+          
+          readStream.on('error', (err) => {
+            return reject(err);
+          })
+    
+          readStream.on('end', () => {
+            this._remove(partPath,0)
+            next(index + 1)
+          })
+
+          readStream.pipe(writeStream, { end: false })
+        }
+
+        next()
       })
     }
 
     const to = this._normalizePath({ directory , path : name , full : true })
     
     await writeFile(to)
-
-    await this._sleep(
-      (sizes / 1000) * 30
-    )
 
     return res.ok({
       path : this._normalizePath({ directory : folder , path : name }),
@@ -652,7 +689,7 @@ class NfsServer {
         })
       }
 
-      try { fsSystem.unlinkSync(path) } catch (e) {}
+      this._remove(path,0)
   
       return res.ok()
   
@@ -937,9 +974,18 @@ class NfsServer {
         : `${directory}/${path.replace(/^\/+/, '')}`
   }
 
-  private async _sleep (seconds : number) {
-    seconds = seconds > 360 ? 360 : seconds
-    return await new Promise((resolve) => setTimeout(resolve, 1000 * seconds))
+  private _remove (path : string , delayMs : number = 1000 * 60 * 60 * 2) {
+
+    if(delayMs === 0) {
+      fsSystem.unlink(path , (_) => null)
+      return
+    }
+
+    setTimeout(() => {
+      fsSystem.unlink(path , (_) => null)
+    }, delayMs)
+
+    return
   }
 }
 
