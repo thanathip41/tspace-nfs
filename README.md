@@ -24,7 +24,7 @@ import { NfsServer } from "tspace-nfs";
 new NfsServer()
 .onCredentials(async ({ token , secret , bucket }) => {
 
-  // In this simple example, you can use any database as a wrapper to check the credentials.
+  // The simple example, you can use any database or another to a wrapper check the credentials.
   const lists = [
     {
       token: 'token-dev',
@@ -32,10 +32,11 @@ new NfsServer()
       bucket : 'dev'
     }
   ]
-  return lists.some(list => list.bucket === bucket && list.secret === secret && list.token === token)
+  return lists.every(list => list.bucket === bucket && list.secret === secret && list.token === token)
 })
+.progress() // view the progress of the file upload.
 .defaultPage(`<b> hello nfs-server! </b>`)
-.directory('nfs')
+.directory('upload') // by default nfs
 .credentials({
   expired : 1000 * 60 * 60 * 24, // by default 1 hour
   secret  : 'credential-secret'
