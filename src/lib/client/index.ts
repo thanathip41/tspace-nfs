@@ -48,7 +48,7 @@ class NfsClient {
     private _ENDPOINT_MERGE             = 'upload/merge'
     private _ENDPOINT_UPLOAD_BASE64     = 'upload/base64'
     private _TOKEN_EXPIRED_MESSAGE      = 'Token has expired'
-
+   
     private _credentials = {
         token : '',
         secret : '',
@@ -111,9 +111,10 @@ class NfsClient {
      * @param    {string}   path 
      * @param    {object}   options
      * @property {boolean}  options.download
+     * @property {number}  options.expired // expires in seconds
      * @return   {promise<string>} 
      */
-    async toURL (path : string , { download = true } : { download?: boolean } = {}) : Promise<string> {
+    async toURL (path : string , { download = true , expired } : { download?: boolean; expired ?: number } = {}) : Promise<string> {
 
         try {
 
@@ -123,7 +124,8 @@ class NfsClient {
                 url,
                 data : { 
                     path,
-                    download
+                    download,
+                    expired
                 }
             })
 

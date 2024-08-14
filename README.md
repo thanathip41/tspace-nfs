@@ -38,7 +38,7 @@ new NfsServer()
 .defaultPage(`<b> hello nfs-server! </b>`)
 .directory('upload') // by default nfs
 .credentials({
-  expired : 1000 * 60 * 60 * 24, // by default 1 hour
+  expired : 60 * 60 * 24, // 24 hours by default 1 hour
   secret  : 'credential-secret'
 }) // the credentials will auto refresh every expired
 fileExpired(60 * 15) // 15 minutes by default 1 hour
@@ -68,7 +68,7 @@ const nfs = new NfsClient({
 
   const fileDirectory = 'my-cat.png'
 
-  const url = await nfs.toURL(fileDirectory , { download : false }) // default download true
+  const url = await nfs.toURL(fileDirectory , { download : false , expired : 60 * 60 }) // default download true , default expired related by nfs-server
 
   const base64 = await nfs.toBase64(fileDirectory)
 
@@ -76,7 +76,7 @@ const nfs = new NfsClient({
 
   const file = files[0] // assume the file from your upload
 
-  await nfs.upload({
+  const { path , size , name } =  await nfs.upload({
     file : file.tempFilePath,
     name : 'my-video.mp4',
     folder : 'my-folder'

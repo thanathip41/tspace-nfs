@@ -160,7 +160,6 @@ class NfsServer {
     this._router = new Router()
 
     this._router.get('/' , this._default)
-   
     this._router.get('/benchmark',this._benchmark)
 
     this._router.groups('/api' , (router) => {
@@ -311,7 +310,7 @@ class NfsServer {
   
       const { bucket , token } = req
 
-      const { path , download } = body
+      const { path , download , expired } = body
 
       const fileName = `${path}`.replace(/^\/+/, '')
       
@@ -326,7 +325,7 @@ class NfsServer {
       }
   
       const key       = String(token)
-      const expires   = new Time().addSeconds(this._fileExpired).toTimeStamp()
+      const expires   = new Time().addSeconds(expired == null || Number.isNaN(Number(expired)) ? this._fileExpired : Number(expired)).toTimeStamp()
       const combined  = `@{${path}-${bucket}-${key}-${expires}-${download}}`
       const signature = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
   
@@ -340,7 +339,8 @@ class NfsServer {
       })
   
     } catch (err : any) {
-      return res.status(500).json({
+      return res.status(500)
+      .json({
         message : err.message
       })
     }
