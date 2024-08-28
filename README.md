@@ -55,6 +55,7 @@ const nfs = new NfsClient({
   bucket    : '<YOUR BUCKET>',  // bucket name
   url       : '<YOUR URL>'      // https://nfs-server.example.com
 })
+.default('_default/uploads') // default folder prefix every the path
 .onError((err, nfs) => {
   console.log('nfs client failed to connect')
   console.log(err.message)
@@ -64,19 +65,23 @@ const nfs = new NfsClient({
   console.log('nfs client connected')
 })
 
+// example
 (async () => {
 
   const fileDirectory = 'my-cat.png'
 
-  const url = await nfs.toURL(fileDirectory , { download : false , expired : 60 * 60 }) // default download true , default expired related by nfs-server
-
+  const url = await nfs.toURL(fileDirectory , { 
+    download : false, // default download true 
+    expired : 60 * 60 // seconds default expired relate by nfs-server
+  }) 
+  
   const base64 = await nfs.toBase64(fileDirectory)
 
   const stream = await nfs.toStream(fileDirectory)
 
-  const file = files[0] // assume the file from your upload
+  const file = req.files.file[0] // assume the file from your upload
 
-  const { path , size , name } =  await nfs.upload({
+  const { path , size , name , url } =  await nfs.upload({
     file : file.tempFilePath,
     name : 'my-video.mp4',
     folder : 'my-folder'

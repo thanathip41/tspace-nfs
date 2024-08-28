@@ -4,6 +4,7 @@ import FormData       from 'form-data'
 import fsSystem       from 'fs'
 import http           from 'http'
 import https          from 'https'
+import { Readable } from 'stream'
 
 /**
  * 
@@ -34,6 +35,7 @@ import https          from 'https'
  *   console.log(url)
  */
 class NfsClient {
+    private _directory                  = ''
     private _event                      = new EventEmitter()
     private _authorization              = ''
     private _url                        = 'http://localhost:8000'
@@ -72,6 +74,19 @@ class NfsClient {
        
         this._getConnect(this._credentials)
 
+    }
+
+    /**
+     * The 'default' method is used to default prefix the directory every path
+     * 
+     * @param {string} directory
+     * @returns {this} 
+     */
+    default(directory : string): this {
+
+        this._directory = directory
+
+        return this
     }
 
     /**
@@ -123,12 +138,12 @@ class NfsClient {
             const response = await this._fetch({
                 url,
                 data : { 
-                    path,
+                    path : this._normalizeDefaultDirectory(path),
                     download,
                     expired
                 }
             })
-
+            
             return `${this._url}/${response.data?.endpoint}`
 
         } catch (err) {
@@ -154,7 +169,7 @@ class NfsClient {
             const response = await this._fetch({
                 url,
                 data : { 
-                    path 
+                    path : this._normalizeDefaultDirectory(path),
                 }
             })
 
@@ -174,14 +189,17 @@ class NfsClient {
      * @param    {string?}   range
      * @return   {promise<string>} 
      */
-    async toStream (path : string , range?: string) : Promise<any> {
+    async toStream (path : string , range?: string) : Promise<Readable> {
         try {
 
             const url = this._URL(this._ENDPOINT_FILE_STREAM)
  
             const response = await this._fetch({
                 url,
-                data : { path , range },
+                data : { 
+                    path : this._normalizeDefaultDirectory(path),
+                    range 
+                },
                 type : 'stream'
             })
 
@@ -211,7 +229,7 @@ class NfsClient {
         extension ?: string
         folder    ?: string
         chunkSize ?: number
-    }) : Promise<{ size : number , path : string , name : string }> {
+    }) : Promise<{ size : number , path : string , name : string , url : string }> {
 
         const CHUNK_SIZE = 1024 * 1024 * (chunkSize == null ? 200 : chunkSize)
         const stats = fsSystem.statSync(file)
@@ -238,7 +256,7 @@ class NfsClient {
 
             form.append('file', chunk, fileName)
 
-            form.append('folder', folder == null ? '' : folder)
+            form.append('folder', this._normalizeDefaultDirectory(folder))
 
             const url = this._URL(this._ENDPOINT_UPLOAD)
 
@@ -257,8 +275,11 @@ class NfsClient {
         if(totalParts !== files.length) {
 
             for(const file of files) {
-                const path = folder == null ? file : `${folder}/${file}`
-                await this.delete(path).catch(_ => null)
+                const path = folder == null 
+                ? file
+                : `${folder}/${file}`
+            
+                await this.delete(this._normalizeDefaultDirectory(path)).catch(_ => null)
             }
 
             throw new Error('Could not upload files. Please verify your file and try again.')
@@ -269,16 +290,19 @@ class NfsClient {
             const response = await this._fetch({
                 url : this._URL(this._ENDPOINT_MERGE),
                 data : {
-                    folder,
+                    folder : this._normalizeDefaultDirectory(folder),
                     name : this._normalizeFilename({ name , extension }),
                     paths : files,
                     totalSize : fileSize
                 }
             })
     
+            const normalizedPath = String(response.data?.path).replace(this._directory,'')
+
             return {
-                url : await this.toURL(response.data?.path),
                 ...response.data,
+                url : await this.toURL(normalizedPath),
+                path : normalizedPath
             }
 
         } catch (err) {
@@ -324,7 +348,7 @@ class NfsClient {
                 url,
                 data : {
                     base64,
-                    folder,
+                    folder : this._normalizeDefaultDirectory(folder),
                     name : this._normalizeFilename({ name , extension })
                 }
             })
@@ -361,7 +385,7 @@ class NfsClient {
             await this._fetch({
                 url,
                 data : {
-                    path
+                    path : this._normalizeDefaultDirectory(path) 
                 }
             })
 
@@ -390,7 +414,7 @@ class NfsClient {
         const response = await this._fetch({
             url,
             data : {
-                folder
+                folder : this._normalizeDefaultDirectory(folder) 
             }
         })
 
@@ -560,7 +584,24 @@ class NfsClient {
         return extension == null 
           ?  name
           : `${name.split('.')[0]}.${extension}`
-      }
+    }
+
+    private _normalizeDefaultDirectory (directory ?: string | null): string {
+
+        if(directory == null) {
+            return this._directory === '' 
+            ? this._directory 
+            : this._directory.replace(/\/\//g, "/")
+        }
+
+        const normalized = (
+            this._directory === ''   
+            ? directory
+            :`${this._directory}/${directory}`
+        ).replace(/\/\//g, "/")
+
+        return normalized
+    }
 }
 
 export { NfsClient }

@@ -4,7 +4,7 @@ import jwt        from 'jsonwebtoken'
 import xml        from 'xml'
 import bcrypt     from 'bcrypt'
 import { Server } from 'http'
-import { Time }   from 'tspace-utils'
+import { Logger, Time }   from 'tspace-utils'
 import Spear , { 
   Router, TContext, 
   TNextFunction
@@ -31,9 +31,22 @@ class NfsServer {
   private _jwtExipred     : number = 60 * 60
   private _jwtSecret      : string = `<secret@${+new Date()}:${Math.floor(Math.random() * 9999)}>`
   private _progress       : boolean = false
+  private _debug          : boolean = false
 
   get instance () {
     return this._app
+  }
+
+  /**
+   * The 'progress' is method used to view the progress of the file upload.
+   * 
+   * @returns {this}
+   */
+  debug(): this {
+
+    this._debug = true
+
+    return this
   }
 
   /**
@@ -173,15 +186,14 @@ class NfsServer {
       router.post('/upload',  this._authMiddleware ,this._API_Upload)
       router.post('/upload/merge',   this._authMiddleware ,this._API_Merge)
       router.post('/upload/base64' , this._authMiddleware ,this._API_UploadBase64)
-
       return router
     })
 
     this._router.get('/:bucket/*' , this._media)
-  
+
     this._app.useRouter(this._router)
 
-    this._app.notFoundHandler(({  req , res }) => {
+    this._app.notfound(({  req , res }) => {
       res.writeHead(404 , { 'Content-Type': 'text/xml'})
 
       const error = {
@@ -194,7 +206,20 @@ class NfsServer {
 
       return res.end(xml([error],{ declaration: true }))
     })
-    
+
+    this._app.catch((err : Error , { res } : TContext) => {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
+      return res
+        .status(500)
+        .json({
+          message    : err?.message
+      });
+    })
+
     this._app.listen(port, ({ port , server }) => {
       return cb == null ? null : cb({ port , server })
     })
@@ -310,14 +335,14 @@ class NfsServer {
   
       const { bucket , token } = req
 
-      const { path , download , expired } = body
+      let { path , download , expired } = body
 
       const fileName = `${path}`.replace(/^\/+/, '')
-      
+
       const directory = this._normalizeDirectory({ bucket , folder : null })
 
       const fullPath = this._normalizePath({ directory , path : String(path) , full : true })
-     
+
       if(!fsSystem.existsSync(fullPath)) {
         return res.status(404).json({
           message : `No such directory or file, '${fileName}'`
@@ -339,6 +364,11 @@ class NfsServer {
       })
   
     } catch (err : any) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
       return res.status(500)
       .json({
         message : err.message
@@ -368,6 +398,11 @@ class NfsServer {
       })
   
     } catch (err : any) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
       return res.status(500).json({
         message : err.message
       })
@@ -376,46 +411,59 @@ class NfsServer {
 
   private _API_Stream = async ({ req , res , body } : TContext) => {
 
-    const { bucket } = req
+    try {
 
-    const { path : filename , range } = body
+      const { bucket } = req
 
-    const directory = this._normalizeDirectory({ bucket , folder : null })
+      const { path : filename , range } = body
 
-    const fullPath = this._normalizePath({ directory , path : String(filename) , full : true})
+      const directory = this._normalizeDirectory({ bucket , folder : null })
+
+      const fullPath = this._normalizePath({ directory , path : String(filename) , full : true})
+      
+      if(!fsSystem.existsSync(fullPath)) {
+        return res.status(404).json({
+          message : `no such file or directory, '${filename}'`
+        })
+      }
+
+      const stat = fsSystem.statSync(fullPath)
+      const fileSize = stat.size;
     
-    if(!fsSystem.existsSync(fullPath)) {
-      return res.status(404).json({
-        message : `no such file or directory, '${filename}'`
-      })
-    }
+      if (range) {
+        const parts = String(range).replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = (end - start) + 1;
+        const file = fsSystem.createReadStream(fullPath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': 'video/mp4',
+        };
+        res.writeHead(206, head);
+        return file.pipe(res);
+      } 
 
-    const stat = fsSystem.statSync(fullPath)
-    const fileSize = stat.size;
-  
-    if (range) {
-      const parts = String(range).replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = (end - start) + 1;
-      const file = fsSystem.createReadStream(fullPath, { start, end });
       const head = {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize,
+        'Content-Length': fileSize,
         'Content-Type': 'video/mp4',
       };
-      res.writeHead(206, head);
-      return file.pipe(res);
-    } 
+      res.writeHead(200, head);
 
-    const head = {
-      'Content-Length': fileSize,
-      'Content-Type': 'video/mp4',
-    };
-    res.writeHead(200, head);
+      return fsSystem.createReadStream(fullPath).pipe(res);
 
-    return fsSystem.createReadStream(fullPath).pipe(res);
+    } catch (err) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
+      throw err
+
+    }
+    
   }
 
   private _API_Storage =  async ({ req, res , body } : TContext) => {
@@ -452,6 +500,11 @@ class NfsServer {
       })
   
     } catch (err : any) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
       return res.status(500).json({
         message : err.message
       })
@@ -473,6 +526,11 @@ class NfsServer {
       })
   
     } catch (err : any) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
       return res.status(500).json({
         message : err.message
       })
@@ -480,193 +538,237 @@ class NfsServer {
   }
 
   private _API_Upload = async ({ req , res , files , body } : TContext) => {
-  
-    const { bucket } = req
+    try {
 
-    const file = files?.file[0]
+      const { bucket } = req
 
-    if (file == null) {
-      return res.status(400).json({
-        message : 'The file is required.'
-      })
-    }
-
-    let { folder } = body
-  
-    if(folder != null) {
-      folder = this._normalizeFolder(String(folder))
-    }
-
-    const directory = this._normalizeDirectory({ bucket , folder })
-
-    if (!fsSystem.existsSync(directory)) {
-      fsSystem.mkdirSync(directory, {
-        recursive: true
-      })
-    }
-
-    const writeFile = (file : string , to : string) => {
-      return new Promise<null>((resolve, reject) => {
-        fsSystem.createReadStream(file, { encoding: 'base64' })
-        .pipe(fsSystem.createWriteStream(to, { encoding: 'base64' }))
-        .on('finish', () => {
-          this._remove(to)
-          this._remove(file,0)
-          return resolve(null)
+      if(!Array.isArray(files?.file)) {
+        return res.status(400).json({
+          message : 'The file is required.'
         })
-        .on('error', (err) => reject(err));
-        return 
+      }
+
+      const file = files?.file[0]
+
+      if (file == null) {
+        return res.status(400).json({
+          message : 'The file is required.'
+        })
+      }
+
+      let { folder } = body
+    
+      if(folder != null) {
+        folder = this._normalizeFolder(String(folder))
+      }
+
+      const directory = this._normalizeDirectory({ bucket , folder })
+
+      if (!fsSystem.existsSync(directory)) {
+
+        if(this._debug) {
+          console.log({ directory , bucket , folder })
+        }
+
+        fsSystem.mkdirSync(directory, {
+          recursive: true
+        })
+      }
+
+      const writeFile = (file : string , to : string) => {
+        return new Promise<null>((resolve, reject) => {
+          fsSystem.createReadStream(file)
+          .pipe(fsSystem.createWriteStream(to))
+          .on('finish', () => {
+            this._remove(to)
+            this._remove(file,0)
+            return resolve(null)
+          })
+          .on('error', (err) => reject(err));
+          return 
+        })
+      }
+
+      await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
+
+      return res.ok({
+        path : this._normalizePath({ directory : folder , path : file.name }),
+        name : file.name,
+        size : file.size
       })
+
+    } catch (err) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
+      throw err
     }
-
-    await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
-
-    return res.ok({
-      path : this._normalizePath({ directory : folder , path : file.name }),
-      name : file.name,
-      size : file.size
-    })
   }
 
   private _API_Merge = async ({ req , res , body } : TContext) => {
   
-    const { bucket } = req
+    try {
 
-    let { 
-      folder, 
-      name,
-      paths,
-      totalSize
-    } = body as {
-      folder ?: string | null
-      name : string
-      paths : string[]
-      totalSize : number
-    }
+      const { bucket } = req
 
-    if(folder != null) {
-      folder = this._normalizeFolder(String(folder))
-    }
+      let { 
+        folder, 
+        name,
+        paths,
+        totalSize
+      } = body as {
+        folder ?: string | null
+        name : string
+        paths : string[]
+        totalSize : number
+      }
 
-    const directory = this._normalizeDirectory({ bucket , folder })
+      if(folder != null) {
+        folder = this._normalizeFolder(String(folder))
+      }
 
-    if (!fsSystem.existsSync(directory)) {
-      fsSystem.mkdirSync(directory, {
-        recursive: true
-      })
-    }
+      const directory = this._normalizeDirectory({ bucket , folder })
 
-    const writeFile = async (to : string) => {
-
-      return new Promise((resolve, reject) => {
-
-        const writeStream = fsSystem.createWriteStream(to , { flags : 'a' })
-
-        writeStream.on('error', (err) => {
-          return reject(err)
+      if (!fsSystem.existsSync(directory)) {
+        fsSystem.mkdirSync(directory, {
+          recursive: true
         })
+      }
 
-        let processedSize = 0
-      
-        const next = (index : number = 0) => {
+      const writeFile = async (to : string) => {
 
-          if (index >= paths.length) {
-            
-            writeStream.end()
+        return new Promise((resolve, reject) => {
 
-            writeStream.close()
+          const writeStream = fsSystem.createWriteStream(to , { flags : 'a' })
 
-            return resolve(null)
-          }
-
-          const partPath = this._normalizePath({
-            directory,
-            path : paths[index],
-            full: true
+          writeStream.on('error', (err) => {
+            return reject(err)
           })
 
-          const readStream = fsSystem.createReadStream(partPath , { 
-            highWaterMark : 1024 * 1024 * 50
-          })
-  
-          if(this._progress) {
-            readStream.on('data', (chunk : string) => {
-              processedSize += chunk.length
-              const progress = ((processedSize / totalSize) * 100).toFixed(2);
-              console.log(`The file '${pathSystem.basename(to)}' in progress: ${progress}%`)
+          let processedSize = 0
+        
+          const next = (index : number = 0) => {
+
+            if (index >= paths.length) {
+              
+              writeStream.end()
+
+              writeStream.close()
+
+              return resolve(null)
+            }
+
+            const partPath = this._normalizePath({
+              directory,
+              path : paths[index],
+              full: true
             })
+
+            const readStream = fsSystem.createReadStream(partPath , { 
+              highWaterMark : 1024 * 1024 * 100
+            })
+    
+            if(this._progress) {
+              readStream.on('data', (chunk : string) => {
+                processedSize += chunk.length
+                const progress = ((processedSize / totalSize) * 100).toFixed(2);
+                console.log(`The file '${pathSystem.basename(to)}' in progress: ${progress}%`)
+              })
+            }
+            
+            readStream.on('error', (err) => {
+              return reject(err);
+            })
+      
+            readStream.on('end', () => {
+              this._remove(partPath,0)
+              next(index + 1)
+            })
+
+            readStream.pipe(writeStream, { end: false })
           }
-          
-          readStream.on('error', (err) => {
-            return reject(err);
-          })
-    
-          readStream.on('end', () => {
-            this._remove(partPath,0)
-            next(index + 1)
-          })
 
-          readStream.pipe(writeStream, { end: false })
-        }
+          next()
+        })
+      }
 
-        next()
+      const to = this._normalizePath({ directory , path : name , full : true })
+      
+      await writeFile(to)
+
+      return res.ok({
+        path : this._normalizePath({ directory : folder , path : name }),
+        name : name,
+        size : fsSystem.statSync(to).size
       })
+
+    } catch (err) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
+      throw err
+
     }
-
-    const to = this._normalizePath({ directory , path : name , full : true })
-    
-    await writeFile(to)
-
-    return res.ok({
-      path : this._normalizePath({ directory : folder , path : name }),
-      name : name,
-      size : fsSystem.statSync(to).size
-    })
   }
 
   private _API_UploadBase64 = async ({ req, res, body  } : TContext) => {
   
-    const { bucket } = req
+    try {
 
-    let { folder , base64 , name } = body
+      const { bucket } = req
 
-    if(folder != null) {
-      folder = this._normalizeFolder(String(folder))
-    }
+      let { folder , base64 , name } = body
 
-    if(base64 === '' || base64 == null) {
-      return res.status(400).json({
-        message : 'The base64 is required.'
+      if(folder != null) {
+        folder = this._normalizeFolder(String(folder))
+      }
+
+      if(base64 === '' || base64 == null) {
+        return res.status(400).json({
+          message : 'The base64 is required.'
+        })
+      }
+
+      if(name === '' || name == null) {
+        return res.status(400).json({
+          message : 'The name is required.'
+        })
+      }
+    
+      const directory = this._normalizeDirectory({ bucket , folder})
+
+      if (!fsSystem.existsSync(directory)) {
+        fsSystem.mkdirSync(directory, {
+          recursive: true
+        })
+      }
+
+      const writeFile = (base64 : string , to : string) => {
+        return fsSystem.writeFileSync(to, String(base64), 'base64')
+      }
+
+      const to = pathSystem.join(pathSystem.resolve(),`${directory}/${name}`)
+
+      writeFile(String(base64), to)
+
+      return res.ok({
+        path : folder ? `${folder}/${name}` : name,
+        name : name,
+        size : fsSystem.statSync(to).size
       })
+    } catch (err) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
+      throw err
+
     }
-
-    if(name === '' || name == null) {
-      return res.status(400).json({
-        message : 'The name is required.'
-      })
-    }
-  
-    const directory = this._normalizeDirectory({ bucket , folder})
-
-    if (!fsSystem.existsSync(directory)) {
-      fsSystem.mkdirSync(directory, {
-        recursive: true
-      })
-    }
-
-    const writeFile = (base64 : string , to : string) => {
-      return fsSystem.writeFileSync(to, String(base64), 'base64')
-    }
-
-    const to = pathSystem.join(pathSystem.resolve(),`${directory}/${name}`)
-
-    writeFile(String(base64), to)
-
-    return res.ok({
-      path : folder ? `${folder}/${name}` : name,
-      name : name,
-      size : fsSystem.statSync(to).size
-    })
   }
 
   private _API_Remove =  async ({ req, res , body } : TContext) => {
@@ -694,6 +796,11 @@ class NfsServer {
       return res.ok()
   
     } catch (err : any) {
+
+      if(this._debug) {
+        console.log(err)
+      }
+
       return res.status(500).json({
         message : err.message
       })
