@@ -592,6 +592,12 @@ class NfsServer {
 
       await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
 
+      console.log({
+        path : this._normalizePath({ directory : folder , path : file.name }),
+        name : file.name,
+        size : file.size
+      })
+
       return res.ok({
         path : this._normalizePath({ directory : folder , path : file.name }),
         name : file.name,
@@ -1081,13 +1087,16 @@ class NfsServer {
     full ?: boolean 
   }): string {
 
-    return full 
-      ? directory == null 
-        ?  pathSystem.join(pathSystem.resolve(),`${path.replace(/^\/+/, '')}`)
-        :  pathSystem.join(pathSystem.resolve(),`${directory}/${path.replace(/^\/+/, '')}`)
-      : directory == null 
-        ? `${path.replace(/^\/+/, '')}`
-        : `${directory}/${path.replace(/^\/+/, '')}`
+    const normalized = full 
+    ? directory == null 
+      ?  pathSystem.join(pathSystem.resolve(),`${path.replace(/^\/+/, '')}`)
+      :  pathSystem.join(pathSystem.resolve(),`${directory}/${path.replace(/^\/+/, '')}`)
+    : directory == null 
+      ? `${path.replace(/^\/+/, '')}`
+      : `${directory}/${path.replace(/^\/+/, '')}`
+
+    return normalized.replace(/^\/+/, '')
+    
   }
 
   private _remove (path : string , delayMs : number = 1000 * 60 * 60 * 2) {

@@ -297,7 +297,9 @@ class NfsClient {
                 }
             })
     
-            const normalizedPath = String(response.data?.path).replace(this._directory,'')
+            const normalizedPath = String(response.data?.path)
+            .replace(this._directory,'')
+            .replace(/^\/+/, '')
 
             return {
                 ...response.data,
