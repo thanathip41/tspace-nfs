@@ -344,6 +344,16 @@ class NfsServer {
       const fullPath = this._normalizePath({ directory , path : String(path) , full : true })
 
       if(!fsSystem.existsSync(fullPath)) {
+
+        if(this._debug) {
+          console.log({
+            fullPath,
+            path,
+            download,
+            expired
+          })
+        }
+
         return res.status(404).json({
           message : `No such directory or file, '${fileName}'`
         })
@@ -1095,7 +1105,7 @@ class NfsServer {
       ? `${path.replace(/^\/+/, '')}`
       : `${directory}/${path.replace(/^\/+/, '')}`
 
-    return normalized.replace(/^\/+/, '')
+    return normalized
     
   }
 
