@@ -41,7 +41,7 @@ new NfsServer()
   expired : 60 * 60 * 24, // 24 hours by default 1 hour
   secret  : 'credential-secret'
 }) // the credentials will auto refresh every expired
-fileExpired(60 * 15) // 15 minutes by default 1 hour
+.fileExpired(60 * 15) // 15 minutes by default 1 hour
 .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
 
 ```
@@ -68,7 +68,7 @@ const nfs = new NfsClient({
 // example
 (async () => {
 
-  const fileDirectory = 'my-cat.png'
+  const fileDirectory = 'my-folder/my-cat.png'
 
   const url = await nfs.toURL(fileDirectory , { 
     download : false, // default download true 
@@ -81,15 +81,16 @@ const nfs = new NfsClient({
 
   const file = req.files.file[0] // assume the file from your upload
 
-  const { path , size , name , url } =  await nfs.upload({
+  const { path , size , name , url } =  await nfs.save({ // can you use nfs.upload too
     file : file.tempFilePath,
     name : 'my-video.mp4',
     folder : 'my-folder'
   })
 
-   await nfs.uploadBase64({
+  await nfs.saveAs({ // can you use nfs.uploadBase64 too
     base64 :  Buffer.from(file.tempFilePath).toString('base64'),
     name   : 'my-video.mp4',
+    extension : 'mp4',
     folder : 'my-folder'
   })
 

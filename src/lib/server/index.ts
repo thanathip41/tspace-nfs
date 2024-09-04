@@ -4,7 +4,7 @@ import jwt        from 'jsonwebtoken'
 import xml        from 'xml'
 import bcrypt     from 'bcrypt'
 import { Server } from 'http'
-import { Logger, Time }   from 'tspace-utils'
+import { Time }   from 'tspace-utils'
 import Spear , { 
   Router, TContext, 
   TNextFunction
@@ -113,7 +113,7 @@ class NfsServer {
    * The 'credentials' is method used to set expiration and secret for credentials
    * 
    * @param    {object}  credentials
-   * @property {number}  credentials.expired
+   * @property {number}  credentials.expired by seconds
    * @property {string?} credentials.secret 
    * @returns  {this}
    */
@@ -176,16 +176,16 @@ class NfsServer {
     this._router.get('/benchmark',this._benchmark)
 
     this._router.groups('/api' , (router) => {
-      router.post('/connect', this._API_Connect)
-      router.post('/storage', this._authMiddleware ,this._API_Storage)
-      router.post('/file',    this._authMiddleware , this._API_File)
-      router.post('/folders', this._authMiddleware , this._API_Folders)
-      router.post('/base64',  this._authMiddleware ,this._API_Base64)
-      router.post('/stream',  this._authMiddleware ,this._API_Stream)
-      router.post('/remove',  this._authMiddleware ,this._API_Remove)
-      router.post('/upload',  this._authMiddleware ,this._API_Upload)
-      router.post('/upload/merge',   this._authMiddleware ,this._API_Merge)
-      router.post('/upload/base64' , this._authMiddleware ,this._API_UploadBase64)
+      router.post('/connect', this._apiConnect)
+      router.post('/storage', this._authMiddleware ,this._apiStorage)
+      router.post('/file',    this._authMiddleware ,this._apiFile)
+      router.post('/folders', this._authMiddleware ,this._apiFolders)
+      router.post('/base64',  this._authMiddleware ,this._apiBase64)
+      router.post('/stream',  this._authMiddleware ,this._apiStream)
+      router.post('/remove',  this._authMiddleware ,this._apiRemove)
+      router.post('/upload',  this._authMiddleware ,this._apiUpload)
+      router.post('/upload/merge',   this._authMiddleware ,this._apiMerge)
+      router.post('/upload/base64' , this._authMiddleware ,this._apiUploadBase64)
       return router
     })
 
@@ -194,30 +194,30 @@ class NfsServer {
     this._app.useRouter(this._router)
 
     this._app.notfound(({  req , res }) => {
+
       res.writeHead(404 , { 'Content-Type': 'text/xml'})
 
       const error = {
-          Error : [
-              { Code : 'Not found' },
-              { Message : 'The request was invalid'},
-              { Resource : req.url },
-          ]
+        Error : [
+            { Code : 'Not found' },
+            { Message : 'The request was invalid'},
+            { Resource : req.url },
+        ]
       }
 
       return res.end(xml([error],{ declaration: true }))
     })
 
-    this._app.catch((err : Error , { res } : TContext) => {
+    this._app.catch((err : Error , { req , res } : TContext) => {
 
       if(this._debug) {
         console.log(err)
       }
 
-      return res
-        .status(500)
-        .json({
-          message    : err?.message
-      });
+      return res.status(500)
+      .json({
+        message : err.message
+      })
     })
 
     this._app.listen(port, ({ port , server }) => {
@@ -237,21 +237,21 @@ class NfsServer {
       try {
 
         const { 
-            key , 
-            expires , 
-            signature , 
-            download
+          AccessKey , 
+          Expires , 
+          Signature , 
+          Download
         } = query as { 
-          key : string, 
-          expires : string, 
-          signature : string,
-          download : string
+          AccessKey : string, 
+          Expires : string, 
+          Signature : string,
+          Download : string
         }
 
         const bucket = params.bucket
       
         if([
-          key , expires , signature , download , bucket
+          AccessKey , Expires , Signature , Download , bucket
         ].some(v => v === '' || v == null)) {
           res.writeHead(400 , { 'Content-Type': 'text/xml'})
           const error = {
@@ -267,9 +267,9 @@ class NfsServer {
         }
 
         const path = String(params['*']).replace(/^\/+/, '')
-        const combined = `@{${path}-${bucket}-${key}-${expires}-${download}}`
-        const compare  = bcrypt.compareSync(combined, Buffer.from(signature,'base64').toString('utf-8'))
-        const expired  = Number.isNaN(+expires) ? true : new Date(+expires) < new Date() 
+        const combined = `@{${path}-${bucket}-${AccessKey}-${Expires}-${Download}}`
+        const compare  = bcrypt.compareSync(combined, Buffer.from(Signature,'base64').toString('utf-8'))
+        const expired  = Number.isNaN(+Expires) ? true : new Date(+Expires) < new Date() 
   
         if(!compare || expired) {
             
@@ -288,10 +288,10 @@ class NfsServer {
         }
   
         const { stream , header , set } = await this._makeStream({
-          bucket,
+          bucket   : bucket,
           filePath : String(path) ,
-          range  :req.headers?.range,
-          download : download === 'true'
+          range    : req.headers?.range,
+          download : Download === Buffer.from(`${Expires}@true`).toString('base64').replace(/[=|?|&]+$/g, '')
         })
   
         if(stream == null || header == null) {
@@ -330,7 +330,7 @@ class NfsServer {
     }
   }
 
-  private _API_File =  async ({ req , res , body } : TContext) => {
+  private _apiFile =  async ({ req , res , body } : TContext) => {
     try {
   
       const { bucket , token } = req
@@ -349,17 +349,18 @@ class NfsServer {
         })
       }
   
-      const key       = String(token)
-      const expires   = new Time().addSeconds(expired == null || Number.isNaN(Number(expired)) ? this._fileExpired : Number(expired)).toTimeStamp()
-      const combined  = `@{${path}-${bucket}-${key}-${expires}-${download}}`
-      const signature = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
+      const key        = String(token)
+      const expires    = new Time().addSeconds(expired == null || Number.isNaN(Number(expired)) ? this._fileExpired : Number(expired)).toTimeStamp()
+      const downloaded = `${Buffer.from(`${expires}@${download}`).toString('base64').replace(/[=|?|&]+$/g, '')}`
+      const combined   = `@{${path}-${bucket}-${key}-${expires}-${downloaded}}`
+      const signature  = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
   
       return res.ok({
         endpoint : [
-          `${bucket}/${fileName}?key=${key}`,
-          `expires=${expires}`,
-          `download=${download}`,
-          `signature=${signature}`
+          `${bucket}/${fileName}?AccessKey=${key}`,
+          `Expires=${expires}`,
+          `Download=${downloaded}`,
+          `Signature=${signature}`
         ].join('&')
       })
   
@@ -376,7 +377,7 @@ class NfsServer {
     }
   }
 
-  private _API_Base64 =  async ({  req, res , body } : TContext) => {
+  private _apiBase64 =  async ({  req, res , body } : TContext) => {
     try {
   
       const { bucket } = req
@@ -409,7 +410,7 @@ class NfsServer {
     }
   }
 
-  private _API_Stream = async ({ req , res , body } : TContext) => {
+  private _apiStream = async ({ req , res , body } : TContext) => {
 
     try {
 
@@ -466,7 +467,7 @@ class NfsServer {
     
   }
 
-  private _API_Storage =  async ({ req, res , body } : TContext) => {
+  private _apiStorage =  async ({ req, res , body } : TContext) => {
     try {
   
       const { bucket } = req
@@ -511,7 +512,7 @@ class NfsServer {
     }
   }
 
-  private _API_Folders =  async ({ req, res } : TContext) => {
+  private _apiFolders =  async ({ req, res } : TContext) => {
 
     try {
   
@@ -537,7 +538,7 @@ class NfsServer {
     }
   }
 
-  private _API_Upload = async ({ req , res , files , body } : TContext) => {
+  private _apiUpload = async ({ req , res , files , body } : TContext) => {
     try {
 
       const { bucket } = req
@@ -607,7 +608,7 @@ class NfsServer {
     }
   }
 
-  private _API_Merge = async ({ req , res , body } : TContext) => {
+  private _apiMerge = async ({ req , res , body } : TContext) => {
   
     try {
 
@@ -715,7 +716,7 @@ class NfsServer {
     }
   }
 
-  private _API_UploadBase64 = async ({ req, res, body  } : TContext) => {
+  private _apiUploadBase64 = async ({ req, res, body  } : TContext) => {
   
     try {
 
@@ -771,7 +772,7 @@ class NfsServer {
     }
   }
 
-  private _API_Remove =  async ({ req, res , body } : TContext) => {
+  private _apiRemove =  async ({ req, res , body } : TContext) => {
     try {
   
       const { bucket } = req
@@ -807,7 +808,7 @@ class NfsServer {
     }
   }
 
-  private _API_Connect = async ({ res , body } : TContext) => {
+  private _apiConnect = async ({ res , body } : TContext) => {
   
     const { token , secret , bucket } = body
 
@@ -818,12 +819,20 @@ class NfsServer {
         secret,
         bucket
       })
-  
+
       if(!credentials) {
         return res.status(401).json({
           message : 'Invalid credentials. Please check the your credentials'
         })
       }
+    }
+
+    const directory = pathSystem.join(pathSystem.resolve(), this._normalizeDirectory({ bucket : String(bucket) }))
+      
+    if(!fsSystem.existsSync(directory)) {
+      fsSystem.mkdirSync(directory, {
+        recursive: true
+      })
     }
 
     return res.json({
@@ -1027,7 +1036,7 @@ class NfsServer {
 
   private _authMiddleware = ({ req, res , headers } : TContext , next : TNextFunction) => {
 
-    const authorization = String(headers.authorization).split(' ')[1];
+    const authorization = String(headers.authorization).split(' ')[1]
 
     if(authorization == null) {
       return res.status(401).json({

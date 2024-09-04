@@ -1,10 +1,10 @@
+import { Readable }   from 'stream'
 import EventEmitter   from 'events'
 import axios          from 'axios'
 import FormData       from 'form-data'
 import fsSystem       from 'fs'
 import http           from 'http'
 import https          from 'https'
-import { Readable } from 'stream'
 
 /**
  * 
@@ -324,8 +324,28 @@ class NfsClient {
         }
     }
 
-      /**
-     * The 'upload' method is used uploading file with base64 encoded
+    /**
+     * The 'save' method is used uploading file
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.file
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @property {number?} obj.chunkSize // unit mb  by default 200 mb
+     * @return   {promise<{size : number , path : string , name : string}>} 
+     */
+    async save ({ file , name , extension , folder , chunkSize } : {
+        file      :  string,
+        name      :  string,
+        extension ?: string
+        folder    ?: string
+        chunkSize ?: number
+    }) : Promise<{ size : number , path : string , name : string , url : string }> {
+        return await this.upload({ file , name , extension , folder , chunkSize })
+    }
+
+    /**
+     * The 'uploadBase64' method is used uploading file with base64 encoded
      * 
      * @param    {object}  obj
      * @property {string}  obj.base64
@@ -371,6 +391,24 @@ class NfsClient {
     }
 
     /**
+     * The 'saveAS' method is used uploading file with base64 encoded
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.base64
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @return   {promise<{size : number , path : string , name : string}>} 
+     */
+    async saveAs ({ base64 , name , extension , folder } : {
+        base64    : string,
+        name      : string,
+        extension ?: string
+        folder    ?: string
+    }) : Promise<{ size : number , path : string , name : string}> {
+        return await this.uploadBase64({ base64 , name , extension , folder })
+    }
+
+    /**
      * The 'delete' method is used to delete a file
      * 
      * @param    {string}   path 
@@ -397,6 +435,16 @@ class NfsClient {
                 return await this.delete(path)
             })
         }
+    }
+
+    /**
+     * The 'remove' method is used to delete a file
+     * 
+     * @param    {string}   path 
+     * @return   {promise<string>} 
+     */
+    async remove (path : string ) : Promise<void> {
+        return await this.delete(path);
     }
 
     /**
