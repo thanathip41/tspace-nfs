@@ -5,6 +5,8 @@ import FormData       from 'form-data'
 import fsSystem       from 'fs'
 import http           from 'http'
 import https          from 'https'
+import bcrypt         from 'bcrypt'
+import { Time } from 'tspace-utils'
 
 /**
  * 
@@ -39,6 +41,7 @@ class NfsClient {
     private _event                      = new EventEmitter()
     private _authorization              = ''
     private _url                        = 'http://localhost:8000'
+    private _fileExpired                =  60 * 60
     private _ENDPOINT_CONNECT           = 'connect'
     private _ENDPOINT_REMOVE            = 'remove'
     private _ENDPOINT_FILE              = 'file'
@@ -126,30 +129,53 @@ class NfsClient {
      * @param    {string}   path 
      * @param    {object}   options
      * @property {boolean}  options.download
-     * @property {number}  options.expired // expires in seconds
+     * @property {number}   options.expired // expires in seconds
+     * @property {number}   options.exists // checks the file exists only
      * @return   {promise<string>} 
      */
-    async toURL (path : string , { download = true , expired } : { download?: boolean; expired ?: number } = {}) : Promise<string> {
+    async toURL (path : string , { download = true , expired , exists = false } : { download?: boolean; expired ?: number; exists ?: boolean } = {}) : Promise<string> {
 
         try {
 
-            const url = this._URL(this._ENDPOINT_FILE)
+            if(exists != null && exists) {
 
-            const response = await this._fetch({
-                url,
-                data : { 
-                    path : this._normalizeDefaultDirectory(path),
-                    download,
-                    expired
-                }
-            })
+                const url = this._URL(this._ENDPOINT_FILE)
+
+                const response = await this._fetch({
+                    url,
+                    data : { 
+                        path : this._normalizeDefaultDirectory(path),
+                        download,
+                        expired
+                    }
+                })
+                
+                return `${this._url}/${response.data?.endpoint}`
+            }
+
+            const fileName = `${path}`.replace(/^\/+/, '')
+
+            const { token , bucket } = this._credentials
+
+            const accessKey  = String(token)
+            const expires    = new Time().addSeconds(expired == null || Number.isNaN(Number(expired)) ? this._fileExpired : Number(expired)).toTimeStamp()
+            const downloaded = `${Buffer.from(`${expires}@${download}`).toString('base64').replace(/[=|?|&]+$/g, '')}`
+            const combined   = `@{${path}-${bucket}-${accessKey}-${expires}-${downloaded}}`
+            const signature  = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
+
+            const endpoint = [
+                `${bucket}/${fileName}?AccessKey=${accessKey}`,
+                `Expires=${expires}`,
+                `Download=${downloaded}`,
+                `Signature=${signature}`
+            ].join('&')
             
-            return `${this._url}/${response.data?.endpoint}`
+            return `${this._url}/${endpoint}`
 
         } catch (err) {
 
             return await this._retryConnect(err, async () => {
-                return await this.toURL(path , { download })
+                return await this.toURL(path , { download , expired , exists })
             })
         }
     }
@@ -221,7 +247,7 @@ class NfsClient {
      * @property {string}  obj.name
      * @property {string?} obj.folder
      * @property {number?} obj.chunkSize // unit mb  by default 200 mb
-     * @return   {promise<{size : number , path : string , name : string}>} 
+     * @return   {promise<{size : number , path : string , name : string , url : string}>} 
      */
     async upload ({ file , name , extension , folder , chunkSize } : {
         file      :  string,
@@ -334,7 +360,7 @@ class NfsClient {
      * @property {string}  obj.name
      * @property {string?} obj.folder
      * @property {number?} obj.chunkSize // unit mb  by default 200 mb
-     * @return   {promise<{size : number , path : string , name : string}>} 
+     * @return   {promise<{size : number , path : string , name : string , url : string}>} 
      */
     async save ({ file , name , extension , folder , chunkSize } : {
         file      :  string,
@@ -386,7 +412,8 @@ class NfsClient {
                 return await this.uploadBase64({
                     base64,
                     name : this._normalizeFilename({ name , extension }),
-                    folder
+                    folder,
+                    extension
                 })
             })
         }
@@ -559,7 +586,6 @@ class NfsClient {
     }
 
     private _URL (endpoint : string) : string {
-
         return `${this._url}/api/${endpoint}`
     }
 

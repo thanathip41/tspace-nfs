@@ -22,6 +22,10 @@ npm install tspace-nfs --save
 import { NfsServer } from "tspace-nfs";
 
 new NfsServer()
+.bucketLists(async () => {
+  // The simple example, you can use any database or another to inform the server about the available bucket lists.
+  return ['dev']
+})
 .onCredentials(async ({ token , secret , bucket }) => {
 
   // The simple example, you can use any database or another to a wrapper check the credentials.
@@ -71,8 +75,9 @@ const nfs = new NfsClient({
   const fileDirectory = 'my-folder/my-cat.png'
 
   const url = await nfs.toURL(fileDirectory , { 
-    download : false, // default download true 
-    expired : 60 * 60 // seconds default expired relate by nfs-server
+    download : false,   // default download true 
+    expired  : 60 * 60  // seconds default expired 1 hour
+    exists   : true     // default exists false for check if the file exists
   }) 
   
   const base64 = await nfs.toBase64(fileDirectory)

@@ -1,15 +1,19 @@
-import pathSystem from 'path'
-import fsSystem   from 'fs'
-import jwt        from 'jsonwebtoken'
-import xml        from 'xml'
-import bcrypt     from 'bcrypt'
-import { Server } from 'http'
-import { Time }   from 'tspace-utils'
-import Spear , { 
-  Router, TContext, 
-  TNextFunction
+import pathSystem   from 'path'
+import fsSystem     from 'fs'
+import jwt          from 'jsonwebtoken'
+import xml          from 'xml'
+import bcrypt       from 'bcrypt'
+import cron         from 'node-cron'
+import { Server }   from 'http'
+import { Time }     from 'tspace-utils'
+import { 
+  type TContext, 
+  type TNextFunction,
+  Application,
+  Router
 } from 'tspace-spear'
-import html from './default-html'
+import Queue from './queue'
+import html  from './default-html'
 /**
  * The 'NfsServer' class is a created the server for nfs
  * 
@@ -21,10 +25,12 @@ import html from './default-html'
  */
 class NfsServer {
 
-  private _app            !: Spear 
+  private _queue          = new Queue(3)
+  private _app            !: Application 
   private _router         !: Router 
   private _html           !: string | null
   private _credentials    !: Function | null
+  private _buckets        !: Function | null
   private _fileExpired    : number = 60 * 60
   private _rootFolder     : string = 'nfs'
   private _cluster        : boolean | number = false
@@ -32,6 +38,8 @@ class NfsServer {
   private _jwtSecret      : string = `<secret@${+new Date()}:${Math.floor(Math.random() * 9999)}>`
   private _progress       : boolean = false
   private _debug          : boolean = false
+  private _trash          : string = '@trash'
+  private _backup         : number = 30
 
   get instance () {
     return this._app
@@ -129,6 +137,20 @@ class NfsServer {
   }
 
   /**
+   * The 'bucketLists' method is used to inform the server about the available bucket lists.
+   * 
+   * @param    {function} callback
+   * @returns  {this}
+   */
+  bucketLists (callback : () => Promise<string[]>) : this {
+
+    this._buckets = callback
+
+    return this
+
+  } 
+
+  /**
    * The 'onCredentials' is method used to wrapper to check the credentials.
    * 
    * @param    {function} callback
@@ -151,7 +173,18 @@ class NfsServer {
    */
   listen(port:number, cb ?: ({port , server} : { port : number , server : Server }) => void) {
 
-    this._app = new Spear({
+    cron.schedule('0 0 0 * * *', async () => {
+
+      if(this._buckets == null) return
+
+      const buckets : string[] = await this._buckets()
+      
+      for(const bucket of buckets) {
+        this._queue.add(() => this._removeOldDirInTrash(bucket))
+      }
+    })
+
+    this._app = new Application({
       cluster : this._cluster
     })
 
@@ -173,6 +206,7 @@ class NfsServer {
     this._router = new Router()
 
     this._router.get('/' , this._default)
+    
     this._router.get('/benchmark',this._benchmark)
 
     this._router.groups('/api' , (router) => {
@@ -184,8 +218,8 @@ class NfsServer {
       router.post('/stream',  this._authMiddleware ,this._apiStream)
       router.post('/remove',  this._authMiddleware ,this._apiRemove)
       router.post('/upload',  this._authMiddleware ,this._apiUpload)
-      router.post('/upload/merge',   this._authMiddleware ,this._apiMerge)
-      router.post('/upload/base64' , this._authMiddleware ,this._apiUploadBase64)
+      router.post('/upload/merge',  this._authMiddleware ,this._apiMerge)
+      router.post('/upload/base64', this._authMiddleware ,this._apiUploadBase64)
       return router
     })
 
@@ -206,6 +240,17 @@ class NfsServer {
       }
 
       return res.end(xml([error],{ declaration: true }))
+    })
+
+    this._app.response((results : any , statusCode : number) => {
+
+      if(typeof results === 'string') return results
+    
+      return {
+        success : statusCode < 400,
+        ...results,
+        statusCode
+      }
     })
 
     this._app.catch((err : Error , { req , res } : TContext) => {
@@ -266,7 +311,7 @@ class NfsServer {
           return res.end(xml([error],{ declaration: true }))
         }
 
-        const path = String(params['*']).replace(/^\/+/, '')
+        const path     = String(params['*']).replace(/^\/+/, '')
         const combined = `@{${path}-${bucket}-${AccessKey}-${Expires}-${Download}}`
         const compare  = bcrypt.compareSync(combined, Buffer.from(Signature,'base64').toString('utf-8'))
         const expired  = Number.isNaN(+Expires) ? true : new Date(+Expires) < new Date() 
@@ -343,7 +388,7 @@ class NfsServer {
 
       const fullPath = this._normalizePath({ directory , path : String(path) , full : true })
 
-      if(!fsSystem.existsSync(fullPath)) {
+      if(!(await this._fileExists(fullPath))) {
 
         if(this._debug) {
           console.log({
@@ -398,7 +443,7 @@ class NfsServer {
 
       const path = this._normalizePath({ directory , path : String(filename) , full : true})
   
-      if(!fsSystem.existsSync(path)) {
+      if(!(await this._fileExists(path))) {
         return res.status(404).json({
           message : `no such file or directory, '${filename}'`
         })
@@ -432,7 +477,7 @@ class NfsServer {
 
       const fullPath = this._normalizePath({ directory , path : String(filename) , full : true})
       
-      if(!fsSystem.existsSync(fullPath)) {
+      if(!(await this._fileExists(fullPath))) {
         return res.status(404).json({
           message : `no such file or directory, '${filename}'`
         })
@@ -490,13 +535,13 @@ class NfsServer {
    
       const directory = this._normalizeDirectory({ bucket , folder })
 
-      if(!fsSystem.existsSync(directory)) {
+      if(!(await this._fileExists(directory))) {
         return res.status(404).json({
           message : `No such directory or folder, '${folder}'`
         })
       }
   
-      const fileDirectories = await this._files(directory)
+      const fileDirectories = await this._files(directory , { ignore : this._trash })
 
       const storage = fileDirectories.map((name) => {
         const stat = fsSystem.statSync(name)
@@ -575,7 +620,7 @@ class NfsServer {
 
       const directory = this._normalizeDirectory({ bucket , folder })
 
-      if (!fsSystem.existsSync(directory)) {
+      if (!(await this._fileExists(directory))) {
 
         if(this._debug) {
           console.log({ directory , bucket , folder })
@@ -592,13 +637,14 @@ class NfsServer {
           .pipe(fsSystem.createWriteStream(to))
           .on('finish', () => {
             this._remove(to)
-            this._remove(file,0)
+            this._remove(file,{ delayMs : 0 })
             return resolve(null)
           })
           .on('error', (err) => reject(err));
           return 
         })
       }
+      
 
       await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
 
@@ -648,7 +694,7 @@ class NfsServer {
 
       const directory = this._normalizeDirectory({ bucket , folder })
 
-      if (!fsSystem.existsSync(directory)) {
+      if (!(await this._fileExists(directory))) {
         fsSystem.mkdirSync(directory, {
           recursive: true
         })
@@ -700,7 +746,7 @@ class NfsServer {
             })
       
             readStream.on('end', () => {
-              this._remove(partPath,0)
+              this._remove(partPath,{ delayMs : 0 })
               next(index + 1)
             })
 
@@ -758,7 +804,7 @@ class NfsServer {
     
       const directory = this._normalizeDirectory({ bucket , folder})
 
-      if (!fsSystem.existsSync(directory)) {
+      if (!(await this._fileExists(directory))) {
         fsSystem.mkdirSync(directory, {
           recursive: true
         })
@@ -801,15 +847,15 @@ class NfsServer {
       
       const path = this._normalizePath({ directory , path : filename , full : true})
      
-      if(!fsSystem.existsSync(path)) {
+      if(!(await this._fileExists(path))) {
         return res.status(404)
         .json({
           message : `No such directory or file, '${filename}'`
         })
       }
 
-      this._remove(path,0)
-  
+      this._queue.add(async () => await this._trashed({ path, bucket , filename }))
+      
       return res.ok()
   
     } catch (err : any) {
@@ -845,7 +891,7 @@ class NfsServer {
 
     const directory = pathSystem.join(pathSystem.resolve(), this._normalizeDirectory({ bucket : String(bucket) }))
       
-    if(!fsSystem.existsSync(directory)) {
+    if(!(await this._fileExists(directory))) {
       fsSystem.mkdirSync(directory, {
         recursive: true
       })
@@ -1069,15 +1115,20 @@ class NfsServer {
     return next()
   }
 
-  private async _files (dir : string) {
+  private async _files (dir : string , { ignore = null} : { ignore ?: string | null } = {}) {
     const directories = fsSystem.readdirSync(dir, { withFileTypes: true })
+
     const files : any[] = await Promise.all(directories.map((directory) => {
       const newDir = pathSystem.resolve(String(dir), directory.name)
+
+      if (directory.isDirectory() && (ignore != null && directory.name === ignore)) {
+        return null
+      }
+
       return directory.isDirectory() ? this._files(newDir) : newDir
     }))
 
-    return [].concat(...files)
-    
+    return [].concat(...files.filter(Boolean))
   }
 
   private _normalizeFolder(folder : string): string {
@@ -1109,7 +1160,7 @@ class NfsServer {
     
   }
 
-  private _remove (path : string , delayMs : number = 1000 * 60 * 60 * 2) {
+  private _remove (path : string , { delayMs = 1000 * 60 * 60  } : { delayMs ?: number } = {}) {
 
     if(delayMs === 0) {
       fsSystem.unlink(path , (_) => null)
@@ -1122,6 +1173,81 @@ class NfsServer {
 
     return
   }
+
+  private async _trashed ({ path , bucket, filename } : { 
+    path     : string
+    bucket   : string
+    filename : string 
+  }) {
+
+    const folder = `${this._trash}/${new Time().onlyDate().toString()}`
+
+    const directory = this._normalizeDirectory({ bucket , folder })
+
+    const newPath = this._normalizePath({ directory , path : filename , full : true })
+
+    const newDirectory = pathSystem.dirname(newPath);
+
+    if(!(await this._fileExists(newDirectory))) {
+      fsSystem.mkdirSync(newDirectory, {
+        recursive: true
+      })
+    }
+
+    return await fsSystem.promises
+    .rename(path , newPath)
+    .catch(_ => {
+      console.log(_)
+      return
+    })
+  }
+
+  private async _fileExists(path : string) : Promise<boolean> {
+    try {
+      await fsSystem.promises.stat(path);
+      return true
+    } catch (err) {
+      return false
+    }
+  }
+  
+  private _removeOldDirInTrash = async (bucket : string) => {
+    
+    const directory = this._normalizeDirectory({ bucket , folder : this._trash })
+
+    const files = await fsSystem.promises.readdir(directory)
+
+    for (const file of files) {
+
+      const dir = this._normalizePath({ directory , path : file , full : true })
+    
+      const stats = await fsSystem.promises.stat(dir)
+
+      if(!stats.isDirectory()) continue
+
+      const format = file.match(/^\d{4}-\d{2}-\d{2}/)
+
+      const folderDate = new Time(format ? format[0] : 0).toTimestamp()
+
+      const ago = new Time().minusDays(this._backup).toTimeStamp()
+
+      if(Number.isNaN(folderDate) || folderDate > ago) continue
+      
+      await this._removeDir(dir)
+
+    }
+
+  }
+
+  private _removeDir = async (path : string) => {
+
+    return await fsSystem.promises
+    .rm(path, { recursive: true })
+    .catch(_ => {
+      return
+    })
+  }
+
 }
 
 export { NfsServer}
