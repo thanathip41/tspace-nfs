@@ -648,12 +648,6 @@ class NfsServer {
 
       await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
 
-      console.log({
-        path : this._normalizePath({ directory : folder , path : file.name }),
-        name : file.name,
-        size : file.size
-      })
-
       return res.ok({
         path : this._normalizePath({ directory : folder , path : file.name }),
         name : file.name,
@@ -1197,7 +1191,6 @@ class NfsServer {
     return await fsSystem.promises
     .rename(path , newPath)
     .catch(_ => {
-      console.log(_)
       return
     })
   }
