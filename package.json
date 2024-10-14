@@ -1,6 +1,6 @@
 {
   "name": "tspace-nfs",
-  "version": "1.1.8",
+  "version": "1.1.9-beta.2",
   "description": "tspace-nfs is a Network File System (NFS) and provides both server and client capabilities for accessing files over a network.",
   "main": "./build/lib/index.js",
   "types": "./build/lib/index.d.ts",
@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/thanathip41",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && copyfiles -u 3 src/lib/server/studio/**/*.html build/lib/server",
     "prepare": "npm run build",
     "beta": "npm run build && npm publish --tag beta",
     "release": "npm run build && npm publish",
@@ -36,22 +36,21 @@
   "dependencies": {
     "axios": "1.7.2",
     "bcrypt": "5.1.1",
-    "bull": "^4.16.3",
     "jsonwebtoken": "9.0.2",
     "node-cron": "^3.0.3",
-    "tspace-spear": "1.1.4",
+    "tspace-spear": "1.1.5",
     "tspace-utils": "1.0.4",
     "xml": "1.0.1"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
-    "@types/express": "^4.17.21",
-    "@types/express-fileupload": "^1.5.0",
+    "@types/express": "^5.0.0",
+    "@types/express-fileupload": "^1.5.1",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node-cron": "^3.0.11",
     "@types/xml": "^1.0.11",
-    "express": "^4.19.2",
-    "express-fileupload": "^1.5.0",
-    "tspace-mysql": "^1.7.5"
+    "copyfiles": "^2.4.1",
+    "express": "^4.21.1",
+    "express-fileupload": "^1.5.1"
   }
 }

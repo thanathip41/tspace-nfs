@@ -26,6 +26,25 @@ new NfsServer()
   // The simple example, you can use any database or another to inform the server about the available bucket lists.
   return ['dev']
 })
+.onStudioCredentials(async ({ username , password }) => {
+    
+    const credentials = [
+        {
+            buckets : ['*'],
+            username: 'root',
+            password: 'root',
+        }
+    ]
+
+    const find = credentials.find(v => v.username === username && v.password === password )
+
+    const result = {
+        logged : find == null ? false : true,
+        buckets : find == null ? [] : find?.buckets
+    }
+
+    return result
+})
 .onCredentials(async ({ token , secret , bucket }) => {
 
   // The simple example, you can use any database or another to a wrapper check the credentials.

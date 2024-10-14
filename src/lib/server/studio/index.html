@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>NFS-Studio</title>
+  <style>
+    .folder-toggle {
+        cursor: pointer;
+    }
+    ul {
+        list-style: none;
+        padding-left: 20px;
+    }
+    svg {
+        width: 16px;
+        height: 16px;
+    }
+    .hidden {
+        display: none;
+    }
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.8);
+      opacity: 0.75;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body class="bg-gray-300 dark:bg-gray-900 dark">
+
+  <nav class="bg-gray-300 border-gray-200 dark:bg-gray-900">
+    <div class="w-screen-xl flex items-center justify-between mx-auto p-4">
+    
+      <div class="flex items-center space-x-3 rtl:space-x-reverse">
+        <svg class="w-12 h-12 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+            <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M15 4v3a1 1 0 0 1-1 1h-3m2 10v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7.13a1 1 0 0 1 .24-.65L6.7 8.35A1 1 0 0 1 7.46 8H9m-1 4H4m16-7v10a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V7.87a1 1 0 0 1 .24-.65l2.46-2.87a1 1 0 0 1 .76-.35H19a1 1 0 0 1 1 1Z"/>
+        </svg>
+        <h1 class="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
+            NFS-Studio
+        </h1>
+      </div>
+
+      <div class="flex space-x-3 rtl:space-x-reverse">
+          <button id="themeToggle" type="button" 
+            class="rounded-lg text-sm px-4 py-2 text-center bg-gray-100 dark:bg-gray-800"
+          >
+            <svg id="toggleIcon" class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M11.675 2.015a.998.998 0 0 0-.403.011C6.09 2.4 2 6.722 2 12c0 5.523 4.477 10 10 10 4.356 0 8.058-2.784 9.43-6.667a1 1 0 0 0-1.02-1.33c-.08.006-.105.005-.127.005h-.001l-.028-.002A5.227 5.227 0 0 0 20 14a8 8 0 0 1-8-8c0-.952.121-1.752.404-2.558a.996.996 0 0 0 .096-.428V3a1 1 0 0 0-.825-.985Z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+          <button id="logout" class="text-gray-800 dark:text-white rounded-lg text-sm px-4 py-2 text-center text-lg bg-gray-100 dark:bg-gray-800 ml-3"> 
+            Logout 
+          </button>
+      </div>
+
+    </div>
+  </nav>
+  
+  <div id="loading" class="flex">
+    <div class="flex flex-col items-center">
+      <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-600"></div>
+      <p class="text-gray-800 dark:text-gray-200 text-xl font-semibold mt-4">Loading...</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 h-screen">
+    <div class="col-span-3 bg-white dark:bg-gray-800 shadow-md border-r p-4">
+      <h1 class="text-3xl mb-4 dark:text-gray-200">Buckets</h1>
+      <ul id="bucket-container" class="space-y-2 dark:text-gray-200"></ul>
+    </div>
+  
+    <div class="col-span-9 pl-4">
+      <div id="dropZone" class="h-full bg-white dark:bg-gray-800 hover:border-blue-500 dark:hover:border-blue-400">
+        <div id="noFilesMessage" class="text-center text-3xl justify-center items-center text-gray-800 dark:text-white pt-[25%]">No files available</div>
+        <div id="tableContainer" class="hidden">
+          <div class="flex items-center space-x-3 p-4">
+            <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
+            <span class="text-blue-600 px-3 py-1 font-mono">
+              <span id="currentPath"></span>
+            </span>
+          </div>
+  
+          <table class="w-full bg-white dark:bg-gray-800 overflow-hidden">
+            <thead>
+              <tr>
+                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Name</th>
+                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Size</th>
+                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Type</th>
+                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="fileTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+      <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Remove</h3>
+      <p class="mb-6 text-gray-600 dark:text-gray-300">Are you sure you want to remove this file?</p>
+      <div class="flex justify-end space-x-4">
+        <button id="cancelBtn" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
+        <button id="confirmBtn" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmEditModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+      <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Rename</h3>
+      <div class="mb-6">
+        <label for="rename" class="block text-sm font-medium text-gray-700 dark:text-gray-300">name</label>
+        <input id="rename" name="rename" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div class="flex justify-end space-x-4">
+        <button id="cancelEditBtn" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
+        <button id="confirmEditBtn" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+<script>
+
+  const $ = (element) => document.querySelector(element)
+  const $$ = (element) => document.querySelectorAll(element)
+
+  const $v = {
+    model : {
+
+    },
+    el : {
+
+    },
+    method : {
+
+    }
+  }
+
+  const confirmModal        = $('#confirmModal')
+  const confirmBtnModal     = $('#confirmBtn')
+  const cancelBtnModal      = $('#cancelBtn')
+  const confirmEditModal    = $('#confirmEditModal')
+  const confirmEditBtnModal = $('#confirmEditBtn')
+  const cancelEditBtnModal  = $('#cancelEdotBtn')
+  const rename              = $('#rename')
+  const fileTableBody       = $('#fileTableBody')
+  const dropZone            = $('#dropZone')
+  const tableContainer      = $('#tableContainer')
+  const noFilesMessage      = $('#noFilesMessage')
+  const loading             = $('#loading')
+  const currentPath         = $('#currentPath')
+  const themeToggle         = $('#themeToggle')
+  const toggleIcon          = $('#toggleIcon')
+  const logout              = $('#logout')
+
+  let currentPathText   = ''
+  let currentPathRemove = ''
+  let currentPathEdit   = ''
+
+  const url = `${window.location.protocol}//${window.location.host}`
+  const supportsFileSystemAccessAPI = 'getAsFileSystemHandle' in DataTransferItem.prototype
+  const supportsWebkitGetAsEntry = 'webkitGetAsEntry' in DataTransferItem.prototype
+
+  function addFolderToTable(folderName) {
+    showTable();
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td class="px-4 py-2">${folderName}/</td>
+      <td class="px-4 py-2">-</td>
+      <td class="px-4 py-2">-</td>
+      <td class="px-4 py-2">${new Date().toLocaleDateString()}</td>
+    `;
+    fileTableBody.appendChild(row);
+  }
+
+  function addFileToTable(file , progress = null) {
+    showTable();
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td class="px-4 py-2">
+        
+        ${file.isFolder 
+        ? `<button class="text-blue-500" type="button" onclick="fetchFiles('${file.path}')"> ${file.name} </button>`
+        : `${file.name}`
+      }
+      </td>
+      <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
+      <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension}</td>
+      <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
+      <td class="flex gap-3 px-4 py-2">
+          <svg target="${file.path}" ${file.isFolder ? '' : 'onclick="onPreview(event)"'} 
+            class="w-5 h-5 ${file.isFolder ? 'cursor-not-allowed' : 'cursor-pointer'} hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
+          </svg>
+
+          <svg target="${file.path}" ${file.isFolder ? '' : 'onclick="onEdit(event)"'} 
+            class="w-5 h-5 ${file.isFolder ? 'cursor-not-allowed' : 'cursor-pointer'} hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
+            <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
+          </svg>
+
+          <svg target="${file.path}" ${file.isFolder ? '' : 'onclick="onRemove(event)"'} 
+            class="w-5 h-5 ${file.isFolder ? 'cursor-not-allowed' : 'cursor-pointer'} hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
+          </svg>
+      </td>
+    `;
+    fileTableBody.appendChild(row);
+  }
+
+  function updateFileProgress(file, progress) {
+    const rows = Array.from(fileTableBody.children);
+    let row = rows.find(r => {
+      return String(r.cells[0].textContent).trim() === file.name
+    })
+
+    if (!row) {
+      addFileToTable({ 
+        name : file.name,
+        size : file.size, 
+        lastModified : new Date().toJSON(),
+        extension : file.type.split('/')[1]
+      } ,progress);
+    } else {
+      row.cells[4].innerHTML = `
+      ${progress === 100 
+        ? `
+          <svg class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
+          </svg>
+
+          <svg class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
+            <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
+          </svg>
+
+          <svg class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
+          </svg>
+
+        ` 
+        : `<progress value="${progress}" max="100"></progress> ${progress}%`
+      }`
+    }
+  }
+
+  function handleFileDrop(files) {
+    for (const file of files) {
+      uploadFileToApi(file);
+    }
+  }
+
+  async function uploadFileToApi(file) {
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${url}/studio/api/upload`, true)
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const progress = ((e.loaded / e.total) * 100).toFixed(2)
+        updateFileProgress(file, +progress);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        console.log(`${file.name} uploaded successfully.`);
+      }
+    };
+
+    xhr.onerror = () => {
+      console.error(`${file.name} failed to upload.`);
+    };
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append('path',currentPathText)
+    xhr.send(formData);
+
+  }
+
+  function showTable() {
+    tableContainer.classList.remove('hidden');
+    noFilesMessage.classList.add('hidden');
+  }
+
+  function hideTable() {
+    tableContainer.classList.add('hidden');
+    noFilesMessage.classList.remove('hidden');
+    
+  }
+
+  function checkTableStatus() {
+    if (fileTableBody.children.length === 0) {
+      hideTable();
+    }
+  }
+
+  async function fetchFiles (target) {
+   
+    try {
+
+        if(target == null || target === '') return
+
+        const response = await fetch(`${url}/studio/api/files/${target}`);
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const res = await response.json();
+
+        const files = res.files
+
+        const tbody = document.getElementById('fileTableBody');
+        tbody.innerHTML = ''
+
+        loading.style.display = 'flex';
+
+        await new Promise(r => setTimeout(r, 500));
+
+        for(const file of files) {
+          addFileToTable(file)
+        }
+
+        loading.style.display = 'none';
+
+        let link = []
+        let currentTarget = []
+        for(const t of target.split('/')) {
+          
+          currentTarget.push(t)
+          link.push(`<button class="text-blue-500"  onclick="fetchFiles('${currentTarget.join('/')}')"> ${t} </button>`)
+        }
+          
+        currentPath.innerHTML = link.join(' / ')
+        currentPathText = target
+
+      } catch (error) {
+        console.error('There was a problem with the fetch operation:', error);
+      }
+  }
+
+  async function fetchFolderStructure() {
+      try {
+          const response = await fetch(`${url}/studio/api/buckets`);
+          if (!response.ok) {
+              throw new Error('Network response was not ok');
+          }
+          const folderStructure = await response.json();
+          await new Promise(r => setTimeout(r, 500));
+          loading.style.display = 'none';
+          $('#bucket-container').innerHTML = generateFolderHTML(folderStructure.buckets);
+          addToggleFunctionality();
+      } catch (error) {
+          console.error('There was a problem with the fetch operation:', error);
+      }
+  }
+
+  function onPreview(e) {
+    const path = e.currentTarget.getAttribute('target')
+    window.open(`${url}/studio/preview${path}`, '_blank');
+  }
+
+  function onEdit(e) {
+    const path = e.currentTarget.getAttribute('target')
+    confirmEditModal.classList.remove('hidden')
+    currentPathEdit = path
+  }
+
+  async function onRemove(e) {
+    const path = e.currentTarget.getAttribute('target')
+    confirmModal.classList.remove('hidden')
+    currentPathRemove = path
+  }
+
+  function generateFolderHTML(folderStructure) {
+      let html = '';
+      
+      folderStructure.forEach((dev , index) => {
+          Object.keys(dev).forEach(key => {
+              const folderList = dev[key];
+              html += `
+                <li>
+                  <button class="flex items-center justify-between w-full text-left bucket-toggle">
+                    <h2 class="text-xl" target="${key}">${key}</h2>
+                    <svg class="arrow-icon"  xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 12.5l-5-5h10l-5 5z" class="arrow-down" />
+                    </svg>
+                  </button>
+                  <ul class="ml-4 mt-2 hidden">
+                      ${generateSubFoldersHTML(folderList)}
+                  </ul>
+                </li>`;
+          });
+      });
+
+      return html;
+  }
+
+  function generateSubFoldersHTML(folders) {
+      let html = '';
+
+      folders.forEach(item => {
+          if (item.isFolder) {
+              const hasSubfolders = item.folders && item.folders.length > 0;
+              html += `
+              <li>
+                  <button class="flex items-center justify-between w-full text-left folder-toggle">
+                      <div class="text-xl" target="${item.path}">${item.name}</div>
+                      ${hasSubfolders ? `
+                      <svg class="arrow-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
+                          <path d="M8 12.5l-5-5h10l-5 5z" class="arrow-down" />
+                      </svg>` : `
+                      <span></span>`}
+                  </button>
+                  <ul class="ml-4 mt-2 ${hasSubfolders ? 'hidden' : ''}">
+                      ${generateSubFoldersHTML(item.folders || [])}
+                  </ul>
+              </li>`;
+          }
+      });
+
+      return html;
+  }
+
+  function addToggleFunctionality() {
+
+    $$('.bucket-toggle').forEach(button => {
+    button.addEventListener('click', async function(e) {
+
+      const target = e.target.getAttribute('target')
+      await fetchFiles(target)
+
+        const sublist = this.nextElementSibling;
+        sublist.classList.toggle('hidden')
+
+        const arrowIcon = this.querySelector('.arrow-icon path');
+        if(arrowIcon) {
+          if (sublist.classList.contains('hidden')) {
+            arrowIcon.setAttribute('d', 'M8 12.5l-5-5h10l-5 5z')
+        } else {
+          arrowIcon.setAttribute('d', 'M8 3.5l5 5H3l5-5z')
+        }
+        }
+            
+      })
+    })
+
+    $$('.folder-toggle').forEach(button => {
+      button.addEventListener('click', async function(e) {
+
+        const target = e.target.getAttribute('target')
+        await fetchFiles(target)
+
+        const sublist = this.nextElementSibling
+
+        sublist.classList.toggle('hidden')
+
+        const arrowIcon = this.querySelector('.arrow-icon path');
+        if(arrowIcon) {
+          if (sublist.classList.contains('hidden')) {
+            arrowIcon.setAttribute('d', 'M8 12.5l-5-5h10l-5 5z')
+        } else {
+          arrowIcon.setAttribute('d', 'M8 3.5l5 5H3l5-5z')
+          }
+        }
+            
+      })
+    })
+  }
+   
+  function themeToggleMode(isDark) {
+    const prefixToReplace = isDark ? 'light:' : 'dark:';
+    const newPrefix = isDark ? 'dark:' : 'light:';
+
+    const body = document.body;
+    body.className = body.className.split(' ').map(className => {
+      return className.startsWith(prefixToReplace) 
+        ? className.replace(prefixToReplace, newPrefix) 
+        : className
+    }).join(' ')
+
+    const elements = document.body.getElementsByTagName('*');
+
+    for (let element of elements) {
+      if(!element.classList) continue
+      
+      element.classList.forEach(className => {
+          if (className.startsWith(prefixToReplace)) {
+              element.classList.replace(className, className.replace(prefixToReplace, newPrefix));
+          }
+      })
+    }
+  }
+
+  function handleDropItems(items) {
+    const files = []
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i].webkitGetAsEntry();
+        if (item) {
+            files.push(traverseFileTree(item))
+        }
+    }
+  }
+
+  function traverseFileTree(item) {
+
+      if (item.isFile) {
+          item.file(file => {
+              console.log({ name: file.name, isFile: true });
+              console.log('file ->' , file)
+          })
+
+          uploadFileToApi(file)
+      }
+      
+      if (item.isDirectory) {
+          const dirReader = item.createReader()
+
+          dirReader.readEntries(entries => {
+            traverseDirectory(item);
+          });
+      }
+  }
+
+  function traverseDirectory(directory) {
+      const dirReader = directory.createReader();
+      currentPathText = currentPathText + '/' + directory.name;
+      dirReader.readEntries(entries => {
+
+          entries.forEach(entry => {
+              // currentPathText = currentPathText + entry.name;
+              console.log(entry , directory)
+              if (entry.isFile) {
+                  entry.file(file => {
+                      uploadFileToApi(file)
+                  });
+              } else if (entry.isDirectory) {
+                  traverseDirectory(entry)
+              }
+          });
+      });
+    }
+
+    dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('border-blue-500');
+
+    // const files = e.dataTransfer.files;
+    
+    // if (files.length > 0) {
+    //   handleFileDrop(files);
+    // }
+
+    const files = e.dataTransfer.files;
+     
+    const fileHandlesPromises = [...e.dataTransfer.items]
+    .filter((item) => item.kind === "file")
+    .map((item) =>
+    supportsFileSystemAccessAPI
+        ? item.getAsFileSystemHandle()
+        : supportsWebkitGetAsEntry
+        ? item.webkitGetAsEntry()
+        : item.getAsFile()
+    );
+
+    const items = e.dataTransfer.items;
+    handleDropItems(items);
+  })
+  
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dropZone.classList.add('border-blue-500');
+  })
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-blue-500');
+  });
+
+  logout.addEventListener('click', async () => {
+
+    loading.style.display = 'flex';
+
+    const response = await fetch(`${url}/studio/api/logout`, {
+        method: 'DELETE'
+    });
+    await new Promise(r => setTimeout(r, 500));
+  
+    window.location.reload()
+    return
+
+  })
+
+  cancelBtnModal.addEventListener('click', () => {
+    confirmModal.classList.add('hidden')
+  })
+
+
+  themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    const isDarkMode = document.body.classList.contains('dark');
+    
+    toggleIcon.innerHTML = isDarkMode 
+    ? `
+      <path fill-rule="evenodd" d="M11.675 2.015a.998.998 0 0 0-.403.011C6.09 2.4 2 6.722 2 12c0 5.523 4.477 10 10 10 4.356 0 8.058-2.784 9.43-6.667a1 1 0 0 0-1.02-1.33c-.08.006-.105.005-.127.005h-.001l-.028-.002A5.227 5.227 0 0 0 20 14a8 8 0 0 1-8-8c0-.952.121-1.752.404-2.558a.996.996 0 0 0 .096-.428V3a1 1 0 0 0-.825-.985Z" clip-rule="evenodd"/>
+    `
+    : `
+      <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5V3m0 18v-2M7.05 7.05 5.636 5.636m12.728 12.728L16.95 16.95M5 12H3m18 0h-2M7.05 16.95l-1.414 1.414M18.364 5.636 16.95 7.05M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/>
+    `
+    themeToggleMode(isDarkMode)
+  });
+
+
+  confirmBtnModal.addEventListener('click', async () => {
+      
+    try {
+        const response = await fetch(`${url}/studio/api/files${currentPathRemove}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const folderStructure = await response.json();
+
+        await fetchFiles(currentPathText)
+        
+    } catch (error) {
+        console.error('There was a problem with the fetch operation:', error);
+    }
+      confirmModal.classList.add('hidden');
+  });
+
+  cancelBtnModal.addEventListener('click', () => {
+    confirmModal.classList.add('hidden');
+  });
+
+  confirmEditBtnModal.addEventListener('click', async () => {
+      
+      try {
+          const response = await fetch(`${url}/studio/api/files${currentPathEdit}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ rename : rename.value }),
+          });
+  
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+  
+          const folderStructure = await response.json();
+  
+          await fetchFiles(currentPathText)
+          
+      } catch (error) {
+          console.error('There was a problem with the fetch operation:', error);
+      }
+        confirmEditModal.classList.add('hidden');
+    });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    checkTableStatus()
+    fetchFolderStructure()
+  });
+  
+</script>
+</html>
