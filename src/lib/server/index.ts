@@ -6,6 +6,7 @@ import bcrypt       from 'bcrypt'
 import cron         from 'node-cron'
 import { Server }   from 'http'
 import { Time }     from 'tspace-utils'
+import { minify }   from 'html-minifier-terser'
 import { 
   type TContext, 
   type TNextFunction,
@@ -31,7 +32,9 @@ class NfsServer {
   private _html           !: string | null
   private _credentials    !: ({ token , secret , bucket } : { token : string; secret : string; bucket : string}) => Promise<boolean> | null
   private _buckets        !: Function | null
-  private _studioCheck    !: ({ username, password } : { username : string; password : string }) => Promise<{ logged : boolean , buckets : string[] }> | null
+  private _onStudioBucketCreated  ?: ({ bucket , secret , token } : { token : string; secret : string; bucket : string}) => Promise<void> | null
+  private _onStudioCredentials    ?: ({ username, password } : { username : string; password : string }) => Promise<{ logged : boolean , buckets : string[] }> | null
+  private _onLoadBucketCredentials ?: () => Promise<{ token : string; secret : string; bucket : string}[]>
   private _fileExpired    : number = 60 * 60
   private _rootFolder     : string = 'nfs'
   private _cluster        : boolean | number = false
@@ -152,6 +155,20 @@ class NfsServer {
   } 
 
   /**
+   * The 'onBucketLists' method is used to inform the server about the available bucket lists.
+   * 
+   * @param    {function} callback
+   * @returns  {this}
+   */
+  onLoadBucketLists (callback : () => Promise<string[]>) : this {
+
+    this._buckets = callback
+
+    return this
+
+  } 
+
+  /**
    * The 'onCredentials' is method used to wrapper to check the credentials.
    * 
    * @param    {function} callback
@@ -166,18 +183,28 @@ class NfsServer {
   } 
 
   /**
-   * The 'onStudioCredentials' is method used to wrapper to check the credentials for studio.
-   * 
-   * @param    {function} callback
+   * The 'useStudio' is method used to wrapper to check the credentials for studio.
+   * @param    {object}   studio
+   * @property {function} studio.onCredentials
+   * @property {function} studio.onBucketCreated
    * @returns  {this}
    */
-  onStudioCredentials (callback : ({ username, password } : { username : string; password : string }) => Promise<{ logged : boolean , buckets : string[] }>) : this {
+  useStudio({
+    onCredentials,
+    onBucketCreated,
+    onLoadBucketCredentials
+  } : {
+    onCredentials   : (({ username, password }: { username: string; password: string }) => Promise<{ logged: boolean; buckets: string[] }>)
+    onBucketCreated ?: (({ token, secret, bucket }: { token: string; secret: string; bucket: string }) => Promise<void>),
+    onLoadBucketCredentials ?: (() => Promise<{ bucket : string , token : string , secret : string}[]>)
+  }): this {
 
-    this._studioCheck = callback
+    this._onStudioCredentials = onCredentials
+    this._onStudioBucketCreated = onBucketCreated
+    this._onLoadBucketCredentials = onLoadBucketCredentials
 
-    return this
-
-  } 
+    return this;
+  }
 
   /**
    * The 'listen' method is used to bind and start a server to a particular port and optionally a hostname.
@@ -202,8 +229,6 @@ class NfsServer {
     this._app = new Application({
       cluster : this._cluster
     })
-
-    this._app.cors()
 
     this._app.useLogger({
       exceptPath  : /\/benchmark(\/|$)|\/favicon\.ico(\/|$)/
@@ -242,19 +267,35 @@ class NfsServer {
       return router
     })
 
-    if(this._studioCheck != null) {
+    if(this._onStudioCredentials != null) {
       this._router.groups('/studio' , (router) => {
         router.get('/' , this._studio)
         router.post('/api/login',this._studioLogin)
+        router.get('/api/storage',this._authStudioMiddleware,this._studioStorage)
         router.get('/preview/*', this._authStudioMiddleware,this._studioPreview)
         router.delete('/api/logout',this._authStudioMiddleware,this._studioLogout)
         router.get('/api/buckets',this._authStudioMiddleware,this._studioBucket)
+        router.post('/api/buckets',this._authStudioMiddleware,this._studioBucketCreate)
         router.get('/api/files/*',this._authStudioMiddleware,this._studioFiles)
         router.put('/api/files/*', this._authStudioMiddleware,this._studioEdit)
         router.delete('/api/files/*', this._authStudioMiddleware,this._studioRemove)
         router.post('/api/upload',this._authStudioMiddleware,this._studioUpload)
 
         return router
+      })
+    } else {
+      this._router.get('/studio' , ({ req , res }) => {
+        res.writeHead(403 , { 'Content-Type': 'text/xml'})
+
+        const error = {
+          Error : [
+              { Code : 'Forbidden' },
+              { Message : 'The request was denied by service, Please enable to use studio mode'},
+              { Resource : req.url },
+          ]
+        }
+
+        return res.end(xml([error],{ declaration: true }))
       })
     }
    
@@ -953,8 +994,96 @@ class NfsServer {
       return res.html(html);
     }
     const html = fsSystem.readFileSync(pathSystem.join(__dirname, 'studio','index.html'), 'utf8');
-   
-    return res.html(html);
+
+    const minifiedHtml = await minify(html, {
+      collapseWhitespace: true,
+      removeComments: true,
+      minifyCSS: true,
+      minifyJS: true
+  });
+
+    return res.html(minifiedHtml);
+  }
+
+  private _studioStorage = async ({  req , res } : TContext) => {
+
+    const allowBuckets : string[] = req.buckets ?? []
+
+    const rootFolder = this._rootFolder
+
+    const buckets = this._buckets == null 
+      ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
+        return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
+      }) 
+      : await this._buckets()
+
+    const lists : any[] = []
+
+    for(const bucket of buckets) {
+
+      if(allowBuckets.includes(bucket) || allowBuckets[0] === '*') {
+        const targetDir = `${rootFolder}/${bucket}`
+        const structures = this._fileStructure(targetDir);
+  
+        lists.push({
+          [bucket] : structures
+        })
+      }
+    }
+    
+
+    const storageSync = (dirPath: string , buckets : string[]): number => {
+      let totalSize = 0
+
+      const readDirSync = (dir: string) => {
+        const fullDirectory = pathSystem.join(pathSystem.resolve(),dir);
+        console.log({ fullDirectory })
+        const files = fsSystem.readdirSync(fullDirectory, { withFileTypes: true });
+
+        for(const file of files) {
+          const fullPath = pathSystem.join(pathSystem.resolve(),dir, file.name);
+          const filePath = pathSystem.join(dir, file.name);
+          const stats = fsSystem.statSync(fullPath);
+
+          if (stats.isDirectory()) {
+
+            console.log({
+              buckets,
+              filePath,
+              continue : !buckets.includes(filePath.replace(/\\/g,'/').split('/')[1]),
+              value: filePath.replace(/\\/g,'/').split('/')[1]
+            })
+
+            if(!buckets.includes(filePath.replace(/\\/g,'/').split('/')[1])) continue
+
+            readDirSync(filePath)
+
+            continue
+          }
+            
+          totalSize += stats.size;
+          
+        }
+        
+      };
+
+      readDirSync(dirPath)
+      
+      return totalSize
+    }
+
+    const bytes = storageSync(this._rootFolder , buckets);
+
+    return res.ok({
+      buckets : buckets.length,
+      storage : {
+        bytes,
+        kb : Number((bytes / 1024).toFixed(2)),
+        mb : Number((bytes / (1024 * 1024)).toFixed(2)),
+        gb : Number((bytes / (1024 * 1024 * 1024)).toFixed(2))
+      }
+    })
+
   }
 
   private _studioPreview = async ({  req, res , params } : TContext) => {
@@ -975,9 +1104,15 @@ class NfsServer {
       filePath = this._normalizeFolder(String(filePath))
     }
 
+    const directory = this._normalizeDirectory({ bucket , folder : null })
+
+    if(!fsSystem.existsSync(pathSystem.join(pathSystem.resolve(),directory,filePath))) {
+      return res.notFound(`The directory '${path}' does not exist`)
+    }
+
     const { stream , set } = await this._makeStream({
       bucket   : bucket,
-      filePath : String(filePath) ,
+      filePath : String(filePath),
       range    : req.headers?.range,
       download : true
     })
@@ -990,7 +1125,7 @@ class NfsServer {
 
   private _studioLogin = async ({  res , body } : TContext) => {
 
-    if(this._studioCheck == null) {
+    if(this._onStudioCredentials == null) {
       return res.badRequest('Please enable the studio')
     }
 
@@ -1000,25 +1135,27 @@ class NfsServer {
       return res.badRequest('Please enter an username and password')
     }
 
-    const check = await this._studioCheck({ username : String(username), password : String(password) })
+    const check = await this._onStudioCredentials({ username : String(username), password : String(password) })
     
     if(!check?.logged)   return res.unauthorized('Please check your username and password')
-      
+    
+    const EXPIRED = 43_200
     const session = jwt.sign({
       data : {
         issuer : 'nfs-studio',
         sub : {
           buckets : check?.buckets ?? [],
-          token  : ''
+          permissions : ['*'],
+          token  : Buffer.from(`${+new Date()}`).toString('base64')
         }
       }
     }, this._jwtSecret , { 
-      expiresIn : this._jwtExipred , 
+      expiresIn : EXPIRED , 
       algorithm : 'HS256'
     })
   
     res.setHeader('Set-Cookie', 
-      `auth.session=${session}; HttpOnly; Max-Age=3600; Path=/studio`
+      `auth.session=${session}; HttpOnly; Max-Age=${EXPIRED}; Path=/studio`
     )
 
     return res.ok()
@@ -1051,6 +1188,10 @@ class NfsServer {
       const allowBuckets : string = req.buckets || []
 
       if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
+        return res.forbidden()
+      }
+
+      if(this._buckets != null && !(await this._buckets()).includes(bucket)) {
         return res.forbidden()
       }
       
@@ -1087,7 +1228,7 @@ class NfsServer {
         })
       }
 
-      const name = `${+new Date()}_${file.name}`
+      const name = `${file.name}`
 
       await writeFile(file.tempFilePath , this._normalizePath({ directory , path : name , full : true }))
 
@@ -1126,9 +1267,14 @@ class NfsServer {
       if(allowBuckets.includes(bucket) || allowBuckets[0] === '*') {
         const targetDir = `${rootFolder}/${bucket}`
         const structures = this._fileStructure(targetDir);
+        const loadCredentials = this._onLoadBucketCredentials == null ? [] : await this._onLoadBucketCredentials()
+        const credentials = loadCredentials.find(v => v.bucket === bucket)
   
         lists.push({
-          [bucket] : structures
+          [bucket] : {
+            credentials, 
+            structures
+          }
         })
       }
     }
@@ -1137,6 +1283,34 @@ class NfsServer {
       buckets : lists
     })
       
+  }
+
+  private _studioBucketCreate = async ({ req , res , body } : TContext) => {
+
+    const { bucket , token , secret } = body
+
+    if([bucket , token , secret].some(v => v == null || v ==='')) {
+      return res.badRequest('Please enter a bucket token and secret')
+    }
+   
+    const directory = this._normalizeDirectory({ bucket : String(bucket) , folder : null })
+
+    if(!(await this._fileExists(directory))) {
+      fsSystem.mkdirSync(directory, {
+        recursive: true
+      })
+    }
+
+    if(this._onStudioBucketCreated != null) {
+      await this._onStudioBucketCreated({
+        bucket : String(bucket),
+        token : String(token),
+        secret : String(secret)
+      })
+    }
+    
+    return res.ok()
+
   }
 
   private _studioFiles = async ({ req, res , params } : TContext) => {
@@ -1162,7 +1336,12 @@ class NfsServer {
     const files = this._fileStructure(targetDir , { includeFiles : true })
 
     return res.ok({
-      files : files.sort(( a , b) => (b.isFolder - a.isFolder))
+      files : files.sort((a, b) => {
+        if (a.isFolder !== b.isFolder) {
+          return b.isFolder - a.isFolder
+        }
+        return +new Date(a.lastModified) - +new Date(b.lastModified)
+      })
     })
       
   }
@@ -1197,7 +1376,7 @@ class NfsServer {
 
     const newPath = this._normalizeDirectory({ 
       bucket , 
-      folder : `${rename}${pathSystem.extname(filePath)}`
+      folder : `${pathSystem.dirname(filePath)}/${rename}${pathSystem.extname(filePath)}`
     })
 
     fsSystem.renameSync(
@@ -1232,6 +1411,15 @@ class NfsServer {
     const fullPath = pathSystem.join(pathSystem.resolve(),this._normalizeDirectory({ bucket , folder : filePath }))
 
     if(!fsSystem.existsSync(fullPath)) return res.notFound()
+
+    const stats = fsSystem.statSync(fullPath) 
+
+    if (stats.isDirectory()) {
+
+      fsSystem.rmSync(fullPath, { recursive: true, force: true })
+
+      return res.ok()
+    }
 
     fsSystem.unlinkSync(fullPath)
 
@@ -1517,11 +1705,6 @@ class NfsServer {
       req.buckets = buckets
   
       req.token  = token
-
-      console.log({
-        buckets,
-        token
-      })
 
       return next()
 

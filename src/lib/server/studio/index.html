@@ -35,15 +35,16 @@
   </style>
 </head>
 <body class="bg-gray-300 dark:bg-gray-900 dark">
+  
 
   <nav class="bg-gray-300 border-gray-200 dark:bg-gray-900">
     <div class="w-screen-xl flex items-center justify-between mx-auto p-4">
     
-      <div class="flex items-center space-x-3 rtl:space-x-reverse">
+      <div class="cursor-pointer flex items-center space-x-3 rtl:space-x-reverse" onclick="window.location.reload()">
         <svg class="w-12 h-12 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
             <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M15 4v3a1 1 0 0 1-1 1h-3m2 10v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7.13a1 1 0 0 1 .24-.65L6.7 8.35A1 1 0 0 1 7.46 8H9m-1 4H4m16-7v10a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V7.87a1 1 0 0 1 .24-.65l2.46-2.87a1 1 0 0 1 .76-.35H19a1 1 0 0 1 1 1Z"/>
         </svg>
-        <h1 class="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
+        <h1 class="self-center text-2xl whitespace-nowrap text-gray-800 dark:text-white">
             NFS-Studio
         </h1>
       </div>
@@ -57,12 +58,89 @@
             </svg>
           </button>
           <button id="logout" class="text-gray-800 dark:text-white rounded-lg text-sm px-4 py-2 text-center text-lg bg-gray-100 dark:bg-gray-800 ml-3"> 
-            Logout 
+            <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H8m12 0-4 4m4-4-4-4M9 4H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h2"/>
+            </svg>            
           </button>
       </div>
 
     </div>
   </nav>
+
+  <div id="notify-container" class="space-y-4 fixed inset-0 m-2 items-center justify-center z-50 pointer-events-none"></div>
+
+  <div class="h-[100vh]">
+
+    <div class="grid grid-cols-12 h-[75vh] overflow-y-auto">
+    
+      <div class="col-span-12 xl:col-span-3 bg-white dark:bg-gray-800 shadow-md border-r p-4">
+        <div class="border-b mb-3">
+          <div class="flex items-center justify-between w-full text-left ">
+            <h1 class="text-3xl mb-2 dark:text-gray-200">Buckets</h1>
+            <svg id="bucketCreate" class="w-8 h-8 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-7 7V5"/>
+            </svg>
+          </div>
+          <h3 class="text-sm dark:text-gray-200">total : <span id="buckets"> </span> </h3>
+          <h3 class="text-sm mb-2 dark:text-gray-200">storaged : <span id="storaged"></span></h3>
+        </div>
+       
+        
+        <ul id="bucket-container" class="space-y-2 dark:text-gray-200"></ul>
+      </div>
+    
+      <div class="col-span-12 xl:col-span-9 p-0 xl:pl-4  mt-4 xl:mt-0">
+        <div id="dropZone" class="h-full bg-white dark:bg-gray-800 hover:border-blue-500 dark:hover:border-blue-400">
+          <div id="noBucketMessage" class="text-center text-3xl justify-center items-center text-gray-800 dark:text-white pt-[15%]">
+            No Buckets available
+          </div>
+          <div id="tableContainer" class="hidden">
+            <div class="flex items-center space-x-3 p-4">
+              <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
+              <span class="text-blue-600 px-3 py-1 font-mono">
+                <span id="currentPath"></span>
+              </span>
+            </div>
+    
+            <div class="overflow-x-auto">
+              <table class="table-auto w-full bg-white dark:bg-gray-800">
+                <thead>
+                  <tr>
+                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Name</th>
+                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Size</th>
+                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Type</th>
+                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="fileTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
+              </table>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+  
+    </div>
+  
+    <div class="grid grid-cols-1 w-full h-[25vh] overflow-y-auto border-t">
+      <div class="mt-2">
+        <table class="table-auto">
+          <thead>
+            <tr>
+              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Directory</th>
+              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Name</th>
+              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Size</th>
+              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Type</th>
+              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Progress</th>
+            </tr>
+          </thead>
+          <tbody id="fileProgressTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
   
   <div id="loading" class="flex">
     <div class="flex flex-col items-center">
@@ -71,52 +149,18 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-12 h-screen">
-    <div class="col-span-3 bg-white dark:bg-gray-800 shadow-md border-r p-4">
-      <h1 class="text-3xl mb-4 dark:text-gray-200">Buckets</h1>
-      <ul id="bucket-container" class="space-y-2 dark:text-gray-200"></ul>
-    </div>
-  
-    <div class="col-span-9 pl-4">
-      <div id="dropZone" class="h-full bg-white dark:bg-gray-800 hover:border-blue-500 dark:hover:border-blue-400">
-        <div id="noFilesMessage" class="text-center text-3xl justify-center items-center text-gray-800 dark:text-white pt-[25%]">No files available</div>
-        <div id="tableContainer" class="hidden">
-          <div class="flex items-center space-x-3 p-4">
-            <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
-            <span class="text-blue-600 px-3 py-1 font-mono">
-              <span id="currentPath"></span>
-            </span>
-          </div>
-  
-          <table class="w-full bg-white dark:bg-gray-800 overflow-hidden">
-            <thead>
-              <tr>
-                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Name</th>
-                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Size</th>
-                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Type</th>
-                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
-                <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="fileTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="confirmModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+  <div id="removeModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
       <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Remove</h3>
       <p class="mb-6 text-gray-600 dark:text-gray-300">Are you sure you want to remove this file?</p>
       <div class="flex justify-end space-x-4">
-        <button id="cancelBtn" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
-        <button id="confirmBtn" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
+        <button id="removeNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
+        <button id="removeYesBtnModal" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
       </div>
     </div>
   </div>
 
-  <div id="confirmEditModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+  <div id="editModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
       <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Rename</h3>
       <div class="mb-6">
@@ -124,61 +168,221 @@
         <input id="rename" name="rename" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
       </div>
       <div class="flex justify-end space-x-4">
-        <button id="cancelEditBtn" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
-        <button id="confirmEditBtn" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
+        <button id="editNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
+        <button id="editYesBtnModal" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
       </div>
     </div>
   </div>
 
+  <div id="bucketModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+      <form id="bucketYesBtnModal" class="space-y-6" novalidate>
+        <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Create Bucket</h3>
+        <div class="mb-6">
+          <label for="bucket" class="block text-sm font-medium text-gray-700 dark:text-gray-300">bucket name</label>
+          <input id="bucket" name="bucket" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="mb-6">
+          <label for="token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">token</label>
+          <input id="token" name="token" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="mb-6">
+          <label for="secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">secret</label>
+          <input id="secret" name="secret" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="flex justify-end space-x-4">
+          <button id="bucketNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">No</button>
+          <button type="submit" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Yes</button>
+        </div>
+        <div id="errorMessage" class="text-red-500 text-sm hidden">Invalid username or password. Please try again.</div>
+      </form>
+    </div>
+  </div>
+  
 </body>
 
 <script>
 
-  const $ = (element) => document.querySelector(element)
-  const $$ = (element) => document.querySelectorAll(element)
+  
 
-  const $v = {
-    model : {
+  const $ = (element) => document.querySelector(element);
+  const $$ = (element) => document.querySelectorAll(element);
 
+  const $state = {
+    data : {
+      url : `${window.location.protocol}//${window.location.host}`,
+      isDarkMode : () => document.body?.classList?.contains('dark') ?? 'dark',
+      path : {
+        selected : '',
+        remove   : '',
+        edit     : ''
+      }
     },
     el : {
-
+      removeModal           : $('#removeModal'),
+      removeYesBtnModal     : $('#removeYesBtnModal'),
+      removeNoBtnModal      : $('#removeNoBtnModal'),
+      editModal             : $('#editModal'),
+      editYesBtnModal       : $('#editYesBtnModal'),
+      editNoBtnModal        : $('#editNoBtnModal'),
+      bucketModal           : $('#bucketModal'),
+      bucketYesBtnModal     : $('#bucketYesBtnModal'),
+      bucketNoBtnModal      : $('#bucketNoBtnModal'),
+      bucketCreate          : $('#bucketCreate'),
+      rename                : $('#rename'),
+      fileProgressTableBody : $('#fileProgressTableBody'),
+      fileTableBody         : $('#fileTableBody'),
+      dropZone              : $('#dropZone'),
+      bucketContainer       : $('#bucket-container'),
+      tableContainer        : $('#tableContainer'),
+      noBucketMessage       : $('#noBucketMessage'),
+      loading               : $('#loading'),
+      currentPath           : $('#currentPath'),
+      themeToggle           : $('#themeToggle'),
+      toggleIcon            : $('#toggleIcon'),
+      logout                : $('#logout'),
+      bucket                : $('#bucket'),
+      token                 : $('#token'),
+      secret                : $('#secret'),
+      buckets               : $('#buckets'),
+      storaged              : $('#storaged'),
+      notifyContainer       : $('#notify-container'),
+      errorMessage          : $('#errorMessage'),
+      bucketToggle          : $$('.bucket-toggle'),
+      folderToggle          : $$('.folder-toggle')
     },
-    method : {
+    fn : {
+      normalizePath (path) {
+        return `${path.replace(/^\/+/, '')}`;
+      },
+      fetchFiles : async function (target) {
 
+        if(target == null || target === '') {
+          throw new Error('You must specify a target path for fetching files')
+        }
+
+        const path = this.normalizePath(target)
+
+        const response = await fetch(`${this.data.url}/studio/api/files/${path}`);
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const res = await response.json();
+
+        const files = res.files;
+
+        return files
+      },
+
+      fetchBuckets : async function () {
+
+        const response = await fetch(`${this.data.url}/studio/api/buckets`);
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const folderStructure = await response.json()
+
+        return folderStructure
+      },
+      fetchStorage : async function () {
+      
+        const response = await fetch(`${this.data.url}/studio/api/storage`);
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
+
+        return data
+
+      },
+      fetchRemove : async function (target) {
+        const path = this.normalizePath(target)
+
+        const response = await fetch(`${this.data.url}/studio/api/files/${path}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return
+      },
+      fetctEdit : async function () {
+        const path = normalizePath($state.data.path.edit)
+
+        const response = await fetch(`${$state.data.url}/studio/api/files/${path}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ rename : rename.value }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+      },
+      uploadFileToApi : async function ({ file , target , callback }) {
+
+        const directory = target.replace(`/${file.name}`,'')
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${$state.data.url}/studio/api/upload`, true);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const progress = ((e.loaded / e.total) * 100).toFixed(2);
+            callback({  
+              name : file.name,
+              size : file.size,
+              extension : String(file.name)?.split('.').pop(),
+              lastModified : new Date().toJSON(),
+              directory
+            }, +progress)
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            notify({ type : 'success' , message  : `The file '${file.name}' has been uploaded.` })
+          }
+        };
+
+        xhr.onerror = () => {
+          notify({ type : 'error' , message  : `The file '${file.name}' has failed to upload.` })
+        };
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append('path',path)
+        xhr.send(formData);
+
+        }
     }
   }
 
-  const confirmModal        = $('#confirmModal')
-  const confirmBtnModal     = $('#confirmBtn')
-  const cancelBtnModal      = $('#cancelBtn')
-  const confirmEditModal    = $('#confirmEditModal')
-  const confirmEditBtnModal = $('#confirmEditBtn')
-  const cancelEditBtnModal  = $('#cancelEdotBtn')
-  const rename              = $('#rename')
-  const fileTableBody       = $('#fileTableBody')
-  const dropZone            = $('#dropZone')
-  const tableContainer      = $('#tableContainer')
-  const noFilesMessage      = $('#noFilesMessage')
-  const loading             = $('#loading')
-  const currentPath         = $('#currentPath')
-  const themeToggle         = $('#themeToggle')
-  const toggleIcon          = $('#toggleIcon')
-  const logout              = $('#logout')
-
-  let currentPathText   = ''
-  let currentPathRemove = ''
-  let currentPathEdit   = ''
-
-  const url = `${window.location.protocol}//${window.location.host}`
-  const supportsFileSystemAccessAPI = 'getAsFileSystemHandle' in DataTransferItem.prototype
-  const supportsWebkitGetAsEntry = 'webkitGetAsEntry' in DataTransferItem.prototype
-
   function addFolderToTable(folderName) {
+    
+    const rows = Array.from(fileTableBody.children)
+    
+    const find = rows.find(r => {
+      return String(r.cells[0].textContent).trim() === folderName
+    })
+
+    if(find) return
+
     showTable();
+
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td class="px-4 py-2">${folderName}/</td>
+    row.innerHTML += `
+      <td class="px-4 py-2">
+        <button class="text-blue-500" type="button" onclick="fetchFiles('${$state.data.path.selected}/${folderName}')"> ${folderName} </button>
+      </td>
       <td class="px-4 py-2">-</td>
       <td class="px-4 py-2">-</td>
       <td class="px-4 py-2">${new Date().toLocaleDateString()}</td>
@@ -200,15 +404,26 @@
           </svg>
       </td>
     `;
-    fileTableBody.appendChild(row);
-  }
 
-  function addFileToTable(file , progress = null) {
+    $state.el.fileTableBody.appendChild(row);
+    themeToggleMode()
+  };
+
+  function addFileToTable(file) {
+
+    const rows = Array.from(fileTableBody.children)
+
+    const find = rows.find(r => {
+      return String(r.cells[0].textContent).trim() === file.name
+    })
+
+    if(find) return
+
     showTable();
+
     const row = document.createElement('tr');
     row.innerHTML = `
       <td class="px-4 py-2">
-        
         ${file.isFolder 
         ? `<button class="text-blue-500" type="button" onclick="fetchFiles('${file.path}')"> ${file.name} </button>`
         : `${file.name}`
@@ -218,88 +433,85 @@
       <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension}</td>
       <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
       <td class="flex gap-3 px-4 py-2">
-          <svg target="${file.path}" ${file.isFolder ? '' : 'onclick="onPreview(event)"'} 
-            class="w-5 h-5 ${file.isFolder ? 'cursor-not-allowed' : 'cursor-pointer'} hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
-          </svg>
-
-          <svg target="${file.path}" ${file.isFolder ? '' : 'onclick="onEdit(event)"'} 
-            class="w-5 h-5 ${file.isFolder ? 'cursor-not-allowed' : 'cursor-pointer'} hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+          ${file.isFolder 
+            ? ''
+            : `
+            <svg target="${file.path}" onclick="onPreview(event)"} 
+              class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
+            </svg>
+            `
+          }
+          
+          <svg target="${file.path}" onclick="onEdit(event)"} 
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
             <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
           </svg>
 
-          <svg target="${file.path}" ${file.isFolder ? '' : 'onclick="onRemove(event)"'} 
-            class="w-5 h-5 ${file.isFolder ? 'cursor-not-allowed' : 'cursor-pointer'} hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+          <svg target="${file.path}" onclick="onRemove(event)" } 
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
           </svg>
       </td>
     `;
-    fileTableBody.appendChild(row);
-  }
+    $state.el.fileTableBody.appendChild(row);
+
+    themeToggleMode()
+  };
 
   function updateFileProgress(file, progress) {
-    const rows = Array.from(fileTableBody.children);
-    let row = rows.find(r => {
-      return String(r.cells[0].textContent).trim() === file.name
+    const rows = Array.from(fileProgressTableBody.children);
+    const row = rows.find(r => {
+      return String(r.cells[0].textContent).trim() === file.directory && String(r.cells[1].textContent).trim() === file.name
     })
 
-    if (!row) {
-      addFileToTable({ 
-        name : file.name,
-        size : file.size, 
-        lastModified : new Date().toJSON(),
-        extension : file.type.split('/')[1]
-      } ,progress);
-    } else {
-      row.cells[4].innerHTML = `
-      ${progress === 100 
-        ? `
-          <svg class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
-          </svg>
-
-          <svg class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
-            <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
-          </svg>
-
-          <svg class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
-          </svg>
-
-        ` 
-        : `<progress value="${progress}" max="100"></progress> ${progress}%`
-      }`
+    if(row) {
+      row.cells[5].innerHTML = `<progress value="${progress}" max="100"></progress> ${progress}%`
+      return
     }
-  }
 
-  function handleFileDrop(files) {
-    for (const file of files) {
-      uploadFileToApi(file , currentPath);
-    }
-  }
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-4 py-2">
+        <button class="text-blue-500" type="button" onclick="fetchFiles('${file.directory}')"> ${file.directory} </button>
+      </td>
+      <td class="px-4 py-2">${file.name}</td>
+      <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
+      <td class="px-4 py-2">${file.extension}</td>
+      <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
+      <td class="px-4 py-2"> <progress value="${progress}" max="100"></progress> ${progress}% </td>
+    `;
+    $state.el.fileProgressTableBody.appendChild(tr);
+    
+  };
 
   async function uploadFileToApi(file , path) {
 
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${url}/studio/api/upload`, true)
+    xhr.open("POST", `${$state.data.url}/studio/api/upload`, true);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
-        const progress = ((e.loaded / e.total) * 100).toFixed(2)
-        updateFileProgress(file, +progress);
+        const progress = ((e.loaded / e.total) * 100).toFixed(2);
+        updateFileProgress({  
+          name : file.name,
+          size : file.size,
+          extension : String(file.name)?.split('.').pop(),
+          lastModified : new Date().toJSON(),
+          directory : path.replace(`/${file.name}`,'')
+        }, +progress);
       }
     };
 
     xhr.onload = () => {
       if (xhr.status === 200) {
-        console.log(`${file.name} uploaded successfully.`);
+        notify({ type : 'success' , message  : `The file '${file.name}' has been uploaded.` })
       }
     };
 
     xhr.onerror = () => {
-      console.error(`${file.name} failed to upload.`);
+      notify({ type : 'error' , message  : `The file '${file.name}' has failed to upload.` })
     };
 
     const formData = new FormData();
@@ -307,142 +519,172 @@
     formData.append('path',path)
     xhr.send(formData);
 
-  }
-
-  async function uploadFileToApi(file , path , isFolder = false ) {
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${url}/studio/api/upload`, true)
-
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && !isFolder) {
-        const progress = ((e.loaded / e.total) * 100).toFixed(2)
-        updateFileProgress(file, +progress);
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        console.log(`${file.name} uploaded successfully.`);
-      }
-    };
-
-    xhr.onerror = () => {
-      console.error(`${file.name} failed to upload.`);
-    };
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append('path',path)
-    xhr.send(formData);
-
-  }
+  };
 
   function showTable() {
-    tableContainer.classList.remove('hidden');
-    noFilesMessage.classList.add('hidden');
-  }
+    $state.el.tableContainer.classList.remove('hidden');
+    $state.el.noBucketMessage.classList.add('hidden');
+  };
 
   function hideTable() {
-    tableContainer.classList.add('hidden');
-    noFilesMessage.classList.remove('hidden');
+    $state.el.tableContainer.classList.add('hidden');
+    $state.el.noBucketMessage.classList.remove('hidden');
     
-  }
+  };
 
   function checkTableStatus() {
-    if (fileTableBody.children.length === 0) {
+    if ($state.el.fileTableBody.children.length === 0) {
       hideTable();
     }
+  };
+
+  function showLoading () {
+    $state.el.loading.style.display = 'flex';
+  }
+
+  function hideLoading () {
+    $state.el.loading.style.display = 'none';
+  }
+
+  async function sleep(ms = 500) {
+    return await new Promise(r => setTimeout(r, ms))
   }
 
   async function fetchFiles (target) {
-   
-    try {
+    if(target == null || target === '') return
 
-        if(target == null || target === '') return
+    const path = normalizePath(target)
 
-        const response = await fetch(`${url}/studio/api/files/${target}`);
+    const response = await fetch(`${$state.data.url}/studio/api/files/${path}`);
+
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+
+    const res = await response.json();
+
+    const files = res.files;
+
+    $state.el.fileTableBody.innerHTML = ''
+
+    showLoading();
+
+    await sleep(500);
+
+    showTable();
+
+    for(const file of files) {
+      addFileToTable(file);
+    }
+
+    hideLoading()
+
+    let link = []
+    let currentTarget = []
+    for(const t of target.split('/')) {
+      currentTarget.push(t);
+      link.push(`<button class="text-blue-500"  onclick="fetchFiles('${currentTarget.join('/')}')"> ${t} </button>`);
+    }
+      
+    $state.el.currentPath.innerHTML = link.join(' / ');
+    $state.data.path.selected = target;
+  }
+
+  async function fetchBucketStructure() {
+      try {
+          showLoading();
+          const response = await fetch(`${$state.data.url}/studio/api/buckets`);
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+
+          const folderStructure = await response.json();
+
+          await sleep(500)
+         
+          hideLoading()
+
+          $state.el.bucketContainer.innerHTML = generateFolderHTML(folderStructure.buckets);
+
+          addToggleFunctionality()
+
+      } catch (error) {
+          hideLoading()
+          notify({ type : 'error' , message  :error.message })
+      }
+  }
+
+  async function fetchStorage() {
+      try {
+
+        showLoading();
+        const response = await fetch(`${$state.data.url}/studio/api/storage`);
 
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+          throw new Error('Network response was not ok');
         }
 
         const res = await response.json();
 
-        const files = res.files
+        await sleep(500)
+        
+        hideLoading()
 
-        const tbody = document.getElementById('fileTableBody');
-        tbody.innerHTML = ''
-
-        loading.style.display = 'flex';
-
-        await new Promise(r => setTimeout(r, 500));
-
-        showTable()
-
-        for(const file of files) {
-          addFileToTable(file)
-        }
-
-        loading.style.display = 'none';
-
-        let link = []
-        let currentTarget = []
-        for(const t of target.split('/')) {
-          
-          currentTarget.push(t)
-          link.push(`<button class="text-blue-500"  onclick="fetchFiles('${currentTarget.join('/')}')"> ${t} </button>`)
-        }
-          
-        currentPath.innerHTML = link.join(' / ')
-        currentPathText = target
+        $state.el.buckets.textContent = `${res.buckets ?? 0} bucket(s)`
+        $state.el.storaged.textContent = (res.storage?.mb ?? 0) > 1024 ? `${res.storage?.gb} GB` : `${res.storage?.mb} MB`
 
       } catch (error) {
-        console.error('There was a problem with the fetch operation:', error);
-      }
-  }
-
-  async function fetchFolderStructure() {
-      try {
-          const response = await fetch(`${url}/studio/api/buckets`);
-          if (!response.ok) {
-              throw new Error('Network response was not ok');
-          }
-          const folderStructure = await response.json();
-          await new Promise(r => setTimeout(r, 500));
-          loading.style.display = 'none';
-          $('#bucket-container').innerHTML = generateFolderHTML(folderStructure.buckets);
-          addToggleFunctionality();
-      } catch (error) {
-          console.error('There was a problem with the fetch operation:', error);
+          hideLoading()
+          notify({ type : 'error' , message  :error.message })
       }
   }
 
   function onPreview(e) {
-    const path = e.currentTarget.getAttribute('target')
-    window.open(`${url}/studio/preview${path}`, '_blank');
+    const path = normalizePath(e.currentTarget.getAttribute('target'));
+    window.open(`${$state.data.url}/studio/preview/${path}`, '_blank');
   }
 
   function onEdit(e) {
-    const path = e.currentTarget.getAttribute('target')
-    confirmEditModal.classList.remove('hidden')
-    currentPathEdit = path
+    const path = normalizePath(e.currentTarget.getAttribute('target'));
+    $state.el.editModal.classList.remove('hidden');
+    $state.data.path.edit = path;
   }
 
-  async function onRemove(e) {
-    const path = e.currentTarget.getAttribute('target')
-    confirmModal.classList.remove('hidden')
-    currentPathRemove = path
-  }
+  function onRemove(e) {
+    const path = normalizePath(e.currentTarget.getAttribute('target'));
+    $state.el.removeModal.classList.remove('hidden');
+    $state.data.path.remove = path;
+  };
 
   function generateFolderHTML(folderStructure) {
       let html = '';
       
       folderStructure.forEach((dev , index) => {
           Object.keys(dev).forEach(key => {
-              const folderList = dev[key];
-              html += `
-                <li>
+            const folderList = dev[key]?.structures ?? [];
+            const credentials = dev[key].credentials ?? null
+            html += `
+            <li>
+              <div class="grid grid-cols-12"> 
+                <div class="col-span-1"> 
+                  <button class="credentials">
+                  <svg class=" w-6 h-6 mr-2 cursor-copy text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M6.94318 11h-.85227l.96023-2.90909h1.07954L9.09091 11h-.85227l-.63637-2.10795h-.02272L6.94318 11Zm-.15909-1.14773h1.60227v.59093H6.78409v-.59093ZM9.37109 11V8.09091h1.25571c.2159 0 .4048.04261.5667.12784.162.08523.2879.20502.3779.35937.0899.15436.1349.33476.1349.5412 0 .20833-.0464.38873-.1392.54119-.0918.15246-.2211.26989-.3878.35229-.1657.0824-.3593.1236-.5809.1236h-.75003v-.61367h.59093c.0928 0 .1719-.0161.2372-.0483.0663-.03314.1169-.08002.152-.14062.036-.06061.054-.13211.054-.21449 0-.08334-.018-.15436-.054-.21307-.0351-.05966-.0857-.10511-.152-.13636-.0653-.0322-.1444-.0483-.2372-.0483h-.2784V11h-.78981Zm3.41481-2.90909V11h-.7898V8.09091h.7898Z"/>
+                      <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M8.31818 2c-.55228 0-1 .44772-1 1v.72878c-.06079.0236-.12113.04809-.18098.07346l-.55228-.53789c-.38828-.37817-1.00715-.37817-1.39543 0L3.30923 5.09564c-.19327.18824-.30229.44659-.30229.71638 0 .26979.10902.52813.30229.71637l.52844.51468c-.01982.04526-.03911.0908-.05785.13662H3c-.55228 0-1 .44771-1 1v2.58981c0 .5523.44772 1 1 1h.77982c.01873.0458.03802.0914.05783.1366l-.52847.5147c-.19327.1883-.30228.4466-.30228.7164 0 .2698.10901.5281.30228.7164l1.88026 1.8313c.38828.3781 1.00715.3781 1.39544 0l.55228-.5379c.05987.0253.12021.0498.18102.0734v.7288c0 .5523.44772 1 1 1h2.65912c.5523 0 1-.4477 1-1v-.7288c.1316-.0511.2612-.1064.3883-.1657l.5435.2614v.4339c0 .5523.4477 1 1 1H14v.0625c0 .5523.4477 1 1 1h.0909v.0625c0 .5523.4477 1 1 1h.6844l.4952.4823c1.1648 1.1345 3.0214 1.1345 4.1863 0l.2409-.2347c.1961-.191.3053-.454.3022-.7277-.0031-.2737-.1183-.5342-.3187-.7207l-6.2162-5.7847c.0173-.0398.0342-.0798.0506-.12h.7799c.5522 0 1-.4477 1-1V8.17969c0-.55229-.4478-1-1-1h-.7799c-.0187-.04583-.038-.09139-.0578-.13666l.5284-.51464c.1933-.18824.3023-.44659.3023-.71638 0-.26979-.109-.52813-.3023-.71637l-1.8803-1.8313c-.3883-.37816-1.0071-.37816-1.3954 0l-.5523.53788c-.0598-.02536-.1201-.04985-.1809-.07344V3c0-.55228-.4477-1-1-1H8.31818Z"/>
+                    </svg>
+                    <p class="hidden">${key}</p>
+                    <span class="hidden">  
+                      ${
+                        credentials == null 
+                        ? ''
+                        : `{bucket}: "${credentials.bucket}" {token}: "${credentials.token}" {secret}: "${credentials.secret}"` 
+                      }
+                    </span>
+                  </button>
+                </div>
+
+                <div class="col-span-11">
+
                   <button class="flex items-center justify-between w-full text-left bucket-toggle">
                     <h2 class="text-xl" target="${key}">${key}</h2>
                     <svg class="arrow-icon"  xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
@@ -452,7 +694,9 @@
                   <ul class="ml-4 mt-2 hidden">
                       ${generateSubFoldersHTML(folderList)}
                   </ul>
-                </li>`;
+                </div>
+              </div>
+            </li>`;
           });
       });
 
@@ -468,7 +712,7 @@
               html += `
               <li>
                   <button class="flex items-center justify-between w-full text-left folder-toggle">
-                      <div class="text-xl" target="${item.path}">${item.name}</div>
+                      <div class="text-md" target="${item.path}">${item.name}</div>
                       ${hasSubfolders ? `
                       <svg class="arrow-icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
                           <path d="M8 12.5l-5-5h10l-5 5z" class="arrow-down" />
@@ -488,35 +732,59 @@
   function addToggleFunctionality() {
 
     $$('.bucket-toggle').forEach(button => {
-    button.addEventListener('click', async function(e) {
 
-      const target = e.target.getAttribute('target')
-      await fetchFiles(target)
+      button.addEventListener('click', async function(e) {
+
+        const target = e.target.getAttribute('target');
+
+        if(target === '' || target == null || target === 'null' || target === 'undefined') {
+          return
+        }
+
+        await fetchFiles(target)
+        .catch(err => {
+
+        })
 
         const sublist = this.nextElementSibling;
-        sublist.classList.toggle('hidden')
+
+        sublist.classList.toggle('hidden');
+
+        await notify({
+          type : 'success',
+          message : `The directory '${target}' has been loaded!`
+        })
 
         const arrowIcon = this.querySelector('.arrow-icon path');
         if(arrowIcon) {
           if (sublist.classList.contains('hidden')) {
             arrowIcon.setAttribute('d', 'M8 12.5l-5-5h10l-5 5z')
-        } else {
-          arrowIcon.setAttribute('d', 'M8 3.5l5 5H3l5-5z')
+          } else {
+            arrowIcon.setAttribute('d', 'M8 3.5l5 5H3l5-5z')
+          }
         }
-        }
-            
       })
     })
 
     $$('.folder-toggle').forEach(button => {
       button.addEventListener('click', async function(e) {
 
-        const target = e.target.getAttribute('target')
-        await fetchFiles(target)
+        const target = e.target.getAttribute('target');
 
-        const sublist = this.nextElementSibling
+        if(target === '' || target == null || target === 'null' || target === 'undefined') {
+          return
+        }
 
-        sublist.classList.toggle('hidden')
+        await fetchFiles(target);
+
+        await notify({
+          type : 'success',
+          message : `The directory '${target}' has been loaded!`
+        })
+
+        const sublist = this.nextElementSibling;
+
+        sublist.classList.toggle('hidden');
 
         const arrowIcon = this.querySelector('.arrow-icon path');
         if(arrowIcon) {
@@ -529,9 +797,32 @@
             
       })
     })
+
+    $$('.credentials').forEach(button => {
+      button.addEventListener('click', async function(e) {
+
+        const bucket = e.currentTarget.querySelector('p')
+        const credentials = e.currentTarget.querySelector('span')
+
+        navigator.clipboard.writeText(credentials.textContent).then(() => {
+          
+          notify({
+            type : 'success',
+            message : `The '${bucket.textContent}'' credentials copied to clipboard!`
+          })
+        }).catch(err => {
+          notify({
+            type : 'error',
+            message : `Failed to copy text: '${err.message}'`
+          })
+        });
+            
+      })
+    })
   }
    
-  function themeToggleMode(isDark) {
+  function themeToggleMode() {
+    const isDark = $state.data.isDarkMode()
     const prefixToReplace = isDark ? 'light:' : 'dark:';
     const newPrefix = isDark ? 'dark:' : 'light:';
 
@@ -540,17 +831,18 @@
       return className.startsWith(prefixToReplace) 
         ? className.replace(prefixToReplace, newPrefix) 
         : className
-    }).join(' ')
+    }).join(' ');
 
     const elements = document.body.getElementsByTagName('*');
 
     for (let element of elements) {
+
       if(!element.classList) continue
       
       element.classList.forEach(className => {
-          if (className.startsWith(prefixToReplace)) {
-              element.classList.replace(className, className.replace(prefixToReplace, newPrefix));
-          }
+        if (className.startsWith(prefixToReplace)) {
+          element.classList.replace(className, className.replace(prefixToReplace, newPrefix));
+        }
       })
     }
   }
@@ -560,62 +852,119 @@
     const promises = [];
 
     for (let i = 0; i < items.length; i++) {
-        const item = items[i].webkitGetAsEntry();
-        if (item) {
-            promises.push(traverseFileTree(item, results, ''))
-        }
+      const item = items[i].webkitGetAsEntry();
+      if (item) {
+          promises.push(traverseFileTree(item, results, ''))
+      } 
     }
 
     return Promise.all(promises).then(() => results);
-}
+  }
 
-function traverseFileTree(item, results, currentDirName) {
+  function traverseFileTree(item, results, currentDirName) {
     return new Promise(resolve => {
-        if (item.isFile) {
-            item.file(file => {
-                results.push({ file, directory: currentDirName })
-                resolve();
-            });
-        } else if (item.isDirectory) {
-            const dirName = item.name;
-            traverseDirectory(item, results, currentDirName + '/' + dirName).then(resolve);
-        } else {
-            resolve();
-        }
-    });
-}
+      if (item.isFile) {
+          item.file(file => {
+              results.push({ file, directory: currentDirName })
+              resolve();
+          });
+      } else if (item.isDirectory) {
+          const dirName = item.name;
+          traverseDirectory(item, results, `${currentDirName}/${dirName}`).then(resolve);
+      } else {
+          resolve();
+      }
+    })
+  }
 
-function traverseDirectory(directory, results, parentDirName) {
+  function traverseDirectory(directory, results, parentDirName) {
     return new Promise(resolve => {
-        const dirReader = directory.createReader();
-        
-        dirReader.readEntries(entries => {
-            const promises = entries.map(entry => {
-                if (entry.isFile) {
-                    return new Promise(fileResolve => {
-                        entry.file(file => {
-                            results.push({ file, directory: parentDirName })
-                            fileResolve();
-                        });
-                    });
-                } else if (entry.isDirectory) {
-                    return traverseDirectory(entry, results, parentDirName+ '/'+ entry.name)
-                }
-            });
-
-            Promise.all(promises).then(resolve);
-        }, error => {
-            console.error('Error reading directory:', error);
-            resolve()
+      const dirReader = directory.createReader();
+      
+      dirReader.readEntries(entries => {
+        const promises = entries.map(entry => {
+          if (entry.isFile) {
+              return new Promise(fileResolve => {
+                  entry.file(file => {
+                      results.push({ file, directory: parentDirName })
+                      fileResolve();
+                  });
+              });
+          } else if (entry.isDirectory) {
+              return traverseDirectory(entry, results, `${parentDirName}/${entry.name}`)
+          }
         });
+
+        Promise.all(promises).then(resolve);
+      }, error => {
+        resolve();
+      });
     });
   }
 
-  dropZone.addEventListener('drop', async (e) => {
+  function normalizePath (path) {
+    return `${path.replace(/^\/+/, '')}`;
+  }
+
+  async function notify({ type, message }) {
+    const notifyContainer = $state.el.notifyContainer
+
+    const notify = document.createElement('div');
+
+    const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
+
+    switch(type.toLowerCase()) {
+      case 'success':
+        notify.className = 'max-w-md text-center bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative';
+        break;
+      case 'error':
+        notify.className = 'max-w-md text-center bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative';
+        break;
+      case 'info':
+        notify.className = 'max-w-md text-center bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative';
+        break;
+      case 'warning':
+        notify.className = 'max-w-md text-center bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative';
+        break;
+      default:
+        notify.className = 'max-w-md text-center bg-gray-100 border border-gray-400 text-gray-700 px-4 py-3 rounded relative';
+    }
+
+    notify.innerHTML = `
+      <strong class="font-bold">${capitalizedType}</strong>
+      <span class="block sm:inline">${message}</span>
+    `;
+
+    notifyContainer.appendChild(notify);
+
+    await sleep(5000) 
+
+    notify.remove()
+  }
+
+  $state.el.dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation()
+  })
+
+  $state.el.dropZone.addEventListener('dragleave', () => {
+    
+  });
+
+  $state.el.dropZone.addEventListener('drop', async (e) => {
+    
     e.preventDefault();
     e.stopPropagation();
-    // dropZone.classList.remove('border-blue-500');
 
+    if($state.data.path.selected === '') {
+
+      notify({
+        type : 'warning',
+        message : 'Please select a bucket to use'
+      })
+      return 
+    }
+    
     const items = e.dataTransfer.items;
 
     const files = await handleDropItems(items)
@@ -628,120 +977,191 @@ function traverseDirectory(directory, results, parentDirName) {
     }))]
 
     for(const folder of folders) {
-      addFolderToTable(folder)
+      addFolderToTable(folder.replace(/\//g, ""))
     }
 
     for(const v of files) {
-      const file = v.file
-      const directory = v.directory
-      console.log({file, directory , v})
+      const file = v.file;
+      const directory = `${v.directory.replace(/^\/+/, '')}`
+      const path = directory !== '' ? $state.data.path.selected+ '/' + directory : $state.data.path.selected
+
       await uploadFileToApi(
         file, 
-        directory !== '' ? currentPathText+ '/' + directory : currentPathText,
-        directory !== '' ? true : false
+        path
       )
-    }
 
+      if(directory) continue
+
+      await addFileToTable({
+        name : file.name,
+        size : file.size,
+        extension : String(file.name)?.split('.').pop(),
+        lastModified : new Date().toJSON(),
+        path : `${path}/${file.name}`
+      })
+    }
   })
   
+  $state.el.logout.addEventListener('click', async () => {
 
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dropZone.classList.add('border-blue-500');
-  })
+    showLoading()
 
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('border-blue-500');
-  });
-
-  logout.addEventListener('click', async () => {
-
-    loading.style.display = 'flex';
-
-    const response = await fetch(`${url}/studio/api/logout`, {
+    const response = await fetch(`${$state.data.url}/studio/api/logout`, {
         method: 'DELETE'
     });
-    await new Promise(r => setTimeout(r, 500));
+
+    await sleep(500)
   
+    hideLoading()
     window.location.reload()
     return
 
   })
 
-  cancelBtnModal.addEventListener('click', () => {
-    confirmModal.classList.add('hidden')
+  $state.el.bucketCreate.addEventListener('click', () => {
+    $state.el.bucketModal.classList.remove('hidden');
   })
 
-
-  themeToggle.addEventListener('click', () => {
+  $state.el.themeToggle.addEventListener('click', () => {
+   
     document.body.classList.toggle('dark');
-    const isDarkMode = document.body.classList.contains('dark');
     
-    toggleIcon.innerHTML = isDarkMode 
+    $state.el.toggleIcon.innerHTML = $state.data.isDarkMode()
     ? `
       <path fill-rule="evenodd" d="M11.675 2.015a.998.998 0 0 0-.403.011C6.09 2.4 2 6.722 2 12c0 5.523 4.477 10 10 10 4.356 0 8.058-2.784 9.43-6.667a1 1 0 0 0-1.02-1.33c-.08.006-.105.005-.127.005h-.001l-.028-.002A5.227 5.227 0 0 0 20 14a8 8 0 0 1-8-8c0-.952.121-1.752.404-2.558a.996.996 0 0 0 .096-.428V3a1 1 0 0 0-.825-.985Z" clip-rule="evenodd"/>
     `
     : `
       <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5V3m0 18v-2M7.05 7.05 5.636 5.636m12.728 12.728L16.95 16.95M5 12H3m18 0h-2M7.05 16.95l-1.414 1.414M18.364 5.636 16.95 7.05M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/>
     `
-    themeToggleMode(isDarkMode)
+    themeToggleMode()
   });
 
-
-  confirmBtnModal.addEventListener('click', async () => {
+  $state.el.removeYesBtnModal.addEventListener('click', async () => {
       
     try {
-        const response = await fetch(`${url}/studio/api/files${currentPathRemove}`, {
-          method: 'DELETE'
-        });
+
+        await $state.fn.fetchRemove($state.data.path.remove)
 
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
 
-        const folderStructure = await response.json();
-
-        await fetchFiles(currentPathText)
+        await $state.fn.fetchFiles($state.data.path.selected)
         
     } catch (error) {
         console.error('There was a problem with the fetch operation:', error);
     }
-      confirmModal.classList.add('hidden');
+      $state.el.removeModal.classList.add('hidden');
   });
 
-  cancelBtnModal.addEventListener('click', () => {
-    confirmModal.classList.add('hidden');
+  $state.el.removeNoBtnModal.addEventListener('click', () => {
+    $state.el.removeModal.classList.add('hidden');
   });
 
-  confirmEditBtnModal.addEventListener('click', async () => {
+  $state.el.editYesBtnModal.addEventListener('click', async () => {
       
-      try {
-          const response = await fetch(`${url}/studio/api/files${currentPathEdit}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ rename : rename.value }),
-          });
-  
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
-          }
-  
-          const folderStructure = await response.json();
-  
-          await fetchFiles(currentPathText)
-          
-      } catch (error) {
-          console.error('There was a problem with the fetch operation:', error);
+    try {
+
+      const path = normalizePath($state.data.path.edit)
+
+      const response = await fetch(`${$state.data.url}/studio/api/files/${path}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rename : rename.value }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
       }
-        confirmEditModal.classList.add('hidden');
-    });
+
+      const folderStructure = await response.json();
+
+      await fetchFiles($state.data.path.selected)
+
+    } catch (error) {
+        console.error('There was a problem with the fetch operation:', error);
+    }
+
+    $state.el.editModal.classList.add('hidden');
+  });
+
+  $state.el.editNoBtnModal.addEventListener('click', () => {
+    $state.el.editModal.classList.add('hidden');
+  });
+
+  $state.el.bucketYesBtnModal.addEventListener('submit', async (event) => {
+    try {
+
+      event.preventDefault();
+
+      showLoading();
+
+      const payload = {
+        bucket  : $state.el.bucket.value,
+        token   : $state.el.token.value,
+        secret  : $state.el.secret.value
+      }
+
+      if([payload.bucket ,payload.token , payload.secret].some(v => v == null || v ==='')) {
+        throw new Error('Please enter a bucket token and secret')
+      }
+
+      const response = await fetch(`${$state.data.url}/studio/api/buckets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          bucket  : $state.el.bucket.value,
+          token   : $state.el.token.value,
+          secret  : $state.el.secret.value
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      hideLoading()
+
+      $state.el.bucketModal.classList.add('hidden');
+      
+      await fetchBucketStructure()
+
+
+      await notify({
+        type : 'success',
+        message : 'The Bucket has been created'
+      })
+
+      $state.el.bucket.value = ''
+      $state.el.token.value = ''
+      $state.el.secret.value = ''
+
+    } catch (error) {
+      console.error('There was a problem with the fetch operation:', error);
+      $state.el.errorMessage.textContent = 'An error occurred. Please try again later.';
+      $state.el.errorMessage.classList.remove('hidden');
+      hideLoading()
+    }
+    
+  });
+
+  $state.el.bucketNoBtnModal.addEventListener('click', () => {
+    $state.el.bucketModal.classList.add('hidden');
+  });
+
+
+
 
   document.addEventListener('DOMContentLoaded', () => {
-    checkTableStatus()
-    fetchFolderStructure()
+    // initialize
+    checkTableStatus();
+    fetchBucketStructure();
+    fetchStorage();
+  
   });
   
 </script>

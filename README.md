@@ -22,28 +22,63 @@ npm install tspace-nfs --save
 import { NfsServer } from "tspace-nfs";
 
 new NfsServer()
-.bucketLists(async () => {
-  // The simple example, you can use any database or another to inform the server about the available bucket lists.
-  return ['dev']
-})
-.onStudioCredentials(async ({ username , password }) => {
+.useStudio({
+    onCredentials : async ({ username , password }) => {
+
+      // The simple example, you can use any database or another to a wrapper check the credentials for studio.
+      const credentials = [
+          {
+              buckets : ['*'],
+              username: 'username',
+              password: 'password',
+          }
+      ]
+  
+      const find = credentials.find(v => v.username === username && v.password === password )
+  
+      const result = {
+          logged : find == null ? false : true, // if true can login
+          buckets : find == null ? [] : find?.buckets
+      }
+  
+      return result
+    },
+    onBucketCreated : async ({ token , secret , bucket }) => {
+
+      // The simple example, you can use any database or another to store data.
+      console.log({
+          token , secret , bucket
+      })
     
-    const credentials = [
-        {
-            buckets : ['*'],
-            username: 'root',
-            password: 'root',
-        }
-    ]
+      return
+    },
+     onLoadBucketCredentials  : async () => {
 
-    const find = credentials.find(v => v.username === username && v.password === password )
+    // The simple example, you can use any database or another to get the credentials.
+      const credentials = [
+          {
+              token : 't', 
+              secret : 's', 
+              bucket : 'b'
+          },
+          {
+              token : 't1', 
+              secret : 's1', 
+              bucket : 'b1'
+          },
+          {
+              token : 't2', 
+              secret : 's2', 
+              bucket : 'b2'
+          }
+      ]
 
-    const result = {
-        logged : find == null ? false : true,
-        buckets : find == null ? [] : find?.buckets
+      return credentials 
     }
-
-    return result
+})
+.onLoadBucketLists(async () => {
+    // The simple example, you can use any database or another to inform the server about the available bucket lists.
+    return await new Promise(r => setTimeout(() => r(['b1','b2']), 200));
 })
 .onCredentials(async ({ token , secret , bucket }) => {
 
