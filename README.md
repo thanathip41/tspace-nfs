@@ -22,6 +22,7 @@ npm install tspace-nfs --save
 import { NfsServer } from "tspace-nfs";
 
 new NfsServer()
+// localhost:8000/studio
 .useStudio({
     onCredentials : async ({ username , password }) => {
 
@@ -29,8 +30,8 @@ new NfsServer()
       const credentials = [
           {
               buckets : ['*'],
-              username: 'username',
-              password: 'password',
+              username: 'root',
+              password: '',
           }
       ]
   

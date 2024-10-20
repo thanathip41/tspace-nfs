@@ -273,6 +273,8 @@ class NfsServer {
         router.post('/api/login',this._studioLogin)
         router.get('/api/storage',this._authStudioMiddleware,this._studioStorage)
         router.get('/preview/*', this._authStudioMiddleware,this._studioPreview)
+        router.get('/api/preview/*', this._authStudioMiddleware,this._stduioPreviewText)
+        router.patch('/api/preview/*', this._authStudioMiddleware,this._stduioPreviewTextEdit)
         router.delete('/api/logout',this._authStudioMiddleware,this._studioLogout)
         router.get('/api/buckets',this._authStudioMiddleware,this._studioBucket)
         router.post('/api/buckets',this._authStudioMiddleware,this._studioBucketCreate)
@@ -988,7 +990,7 @@ class NfsServer {
 
     const auth = cookies['auth.session']
 
-    if(!auth) {
+    if(!auth || auth == null) {
       const html = fsSystem.readFileSync(pathSystem.join(__dirname, 'studio','login.html'), 'utf8');
    
       return res.html(html);
@@ -1000,7 +1002,7 @@ class NfsServer {
       removeComments: true,
       minifyCSS: true,
       minifyJS: true
-  });
+    });
 
     return res.html(minifiedHtml);
   }
@@ -1011,33 +1013,30 @@ class NfsServer {
 
     const rootFolder = this._rootFolder
 
-    const buckets = this._buckets == null 
+    const buckets = (this._buckets == null 
       ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
         return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
       }) 
       : await this._buckets()
+    ).filter((bucket : string) => allowBuckets.includes(bucket) || allowBuckets[0] === '*')
 
     const lists : any[] = []
 
     for(const bucket of buckets) {
-
-      if(allowBuckets.includes(bucket) || allowBuckets[0] === '*') {
-        const targetDir = `${rootFolder}/${bucket}`
-        const structures = this._fileStructure(targetDir);
+      const targetDir = `${rootFolder}/${bucket}`
+      const structures = this._fileStructure(targetDir);
   
-        lists.push({
-          [bucket] : structures
-        })
-      }
+      lists.push({
+        [bucket] : structures
+      })
     }
     
-
     const storageSync = (dirPath: string , buckets : string[]): number => {
       let totalSize = 0
 
       const readDirSync = (dir: string) => {
         const fullDirectory = pathSystem.join(pathSystem.resolve(),dir);
-        console.log({ fullDirectory })
+        
         const files = fsSystem.readdirSync(fullDirectory, { withFileTypes: true });
 
         for(const file of files) {
@@ -1046,14 +1045,6 @@ class NfsServer {
           const stats = fsSystem.statSync(fullPath);
 
           if (stats.isDirectory()) {
-
-            console.log({
-              buckets,
-              filePath,
-              continue : !buckets.includes(filePath.replace(/\\/g,'/').split('/')[1]),
-              value: filePath.replace(/\\/g,'/').split('/')[1]
-            })
-
             if(!buckets.includes(filePath.replace(/\\/g,'/').split('/')[1])) continue
 
             readDirSync(filePath)
@@ -1110,6 +1101,32 @@ class NfsServer {
       return res.notFound(`The directory '${path}' does not exist`)
     }
 
+    const extension = pathSystem.extname(filePath).replace(/\./g,'')
+    const textFileExtensions = [
+      'txt', 'md', 'csv', 'json', 'xml', 'html', 'css', 'js', 'ts', 
+      'java','go','rs', 'py', 'log', 'yaml', 'ini', 'bat', 'sh', 'sql', 
+      'conf', 'rtf', 'tex', 'srt', 'plist', 'env','yml','yaml','key'
+    ];
+
+    if(textFileExtensions.includes(extension)) {
+
+      const html = fsSystem.readFileSync(pathSystem.join(__dirname, 'studio','vs-code.html'), 'utf8')
+      
+      const minifiedHtml = await minify(html, {
+        collapseWhitespace: true,
+        removeComments: true,
+        minifyCSS: true,
+        minifyJS: true
+      })
+
+      const language = {
+        'ts' : 'typescript',
+        'js' : 'javascript'
+      }[extension] ?? extension
+     
+      return res.html(minifiedHtml.replace('{{language}}',language))
+    }
+
     const { stream , set } = await this._makeStream({
       bucket   : bucket,
       filePath : String(filePath),
@@ -1123,6 +1140,72 @@ class NfsServer {
 
   }
 
+  private _stduioPreviewText = async ({  req, res , params } : TContext) => {
+
+    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+ 
+    const [bucket, ...rest] = String(path).split('/');
+
+    const allowBuckets : string = req.buckets || []
+    
+    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
+      return res.forbidden()
+    }
+      
+    let filePath = rest.join('/')
+
+    if(filePath != null) {
+      filePath = this._normalizeFolder(String(filePath))
+    }
+
+    const directory = this._normalizeDirectory({ bucket , folder : null })
+
+    if(!fsSystem.existsSync(pathSystem.join(pathSystem.resolve(),directory,filePath))) {
+      return res.notFound(`The directory '${path}' does not exist`)
+    }
+
+    const text = fsSystem.readFileSync(pathSystem.join(pathSystem.resolve(),this._rootFolder,bucket,filePath),'utf8')
+
+    return res.send(text);
+
+  }
+
+  private _stduioPreviewTextEdit = async ({  req, res , params , body } : TContext) => {
+
+    if(body.content == null) {
+      return res.badRequest('Please enter a content for rewrite file')
+    }
+    
+    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+ 
+    const [bucket, ...rest] = String(path).split('/');
+
+    const allowBuckets : string = req.buckets || []
+    
+    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
+      return res.forbidden()
+    }
+      
+    let filePath = rest.join('/')
+
+    if(filePath != null) {
+      filePath = this._normalizeFolder(String(filePath))
+    }
+
+    const directory = this._normalizeDirectory({ bucket , folder : null })
+
+    const fullPath = pathSystem.join(pathSystem.resolve(),directory,filePath)
+
+    if(!fsSystem.existsSync(fullPath)) {
+      return res.notFound(`The directory '${path}' does not exist`)
+    }
+
+    fsSystem.writeFileSync(fullPath , String(body.content),'utf-8')
+
+    return res.ok()
+
+  }
+
   private _studioLogin = async ({  res , body } : TContext) => {
 
     if(this._onStudioCredentials == null) {
@@ -1131,8 +1214,8 @@ class NfsServer {
 
     const { username , password } = body
 
-    if(!username || !password) {
-      return res.badRequest('Please enter an username and password')
+    if(!username) {
+      return res.badRequest('Please enter an username')
     }
 
     const check = await this._onStudioCredentials({ username : String(username), password : String(password) })
@@ -1254,26 +1337,80 @@ class NfsServer {
 
     const rootFolder = this._rootFolder
 
-    const buckets = this._buckets == null 
+    const buckets = (this._buckets == null 
       ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
         return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
       }) 
       : await this._buckets()
+    ).filter((bucket : string) => allowBuckets.includes(bucket) || allowBuckets[0] === '*')
 
     const lists : any[] = []
+
+    const storageSync = (dirPath: string , bucket : string[]): number => {
+      let totalSize = 0
+
+      const readDirSync = (dir: string) => {
+        const fullDirectory = pathSystem.join(pathSystem.resolve(),dir);
+        
+        const files = fsSystem.readdirSync(fullDirectory, { withFileTypes: true });
+
+        for(const file of files) {
+          const fullPath = pathSystem.join(pathSystem.resolve(),dir, file.name);
+          const filePath = pathSystem.join(dir, file.name);
+          const stats = fsSystem.statSync(fullPath);
+
+          if (stats.isDirectory()) {
+            readDirSync(filePath)
+
+            continue
+          }
+            
+          totalSize += stats.size;
+          
+        }
+        
+      };
+
+      readDirSync([dirPath,bucket].join('/'))
+      
+      return totalSize
+    }
 
     for(const bucket of buckets) {
 
       if(allowBuckets.includes(bucket) || allowBuckets[0] === '*') {
-        const targetDir = `${rootFolder}/${bucket}`
-        const structures = this._fileStructure(targetDir);
+
+        const fullPath = pathSystem.join(pathSystem.resolve(),this._rootFolder,bucket)
+
+        if(!(await this._fileExists(fullPath))) {
+          fsSystem.mkdirSync(fullPath, {
+            recursive: true
+          })
+
+          if(this._onStudioBucketCreated != null) {
+            const random  = () => [1,2,3].map(v => Math.random().toString(36).substring(3)).join('')
+            await this._onStudioBucketCreated({
+              bucket : String(bucket),
+              token : String(random()),
+              secret : String(random())
+            })
+          }
+        }
+
         const loadCredentials = this._onLoadBucketCredentials == null ? [] : await this._onLoadBucketCredentials()
         const credentials = loadCredentials.find(v => v.bucket === bucket)
+        const bytes = storageSync(this._rootFolder,bucket)
   
         lists.push({
           [bucket] : {
-            credentials, 
-            structures
+            credentials,
+            storage :  {
+              bytes,
+              kb : Number((bytes / 1024).toFixed(2)),
+              mb : Number((bytes / (1024 * 1024)).toFixed(2)),
+              gb : Number((bytes / (1024 * 1024 * 1024)).toFixed(2))
+            }
+
           }
         })
       }
