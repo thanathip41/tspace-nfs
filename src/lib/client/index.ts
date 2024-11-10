@@ -560,15 +560,15 @@ class NfsClient {
                 httpAgent : new http.Agent({
                     keepAlive: true,
                     timeout : 0,
-                    maxSockets: 10,
-                    maxFreeSockets: 5
+                    maxSockets: 100, 
+                    maxFreeSockets: 10,
                 }),
                 httpsAgent: new https.Agent({
                     keepAlive: true,
                     rejectUnauthorized: false,
                     timeout : 0,
-                    maxSockets: 10,
-                    maxFreeSockets: 5,
+                    maxSockets: 100,
+                    maxFreeSockets: 10,
                 }),
                 timeout : 0,
                 maxRate : [ Infinity , Infinity],
@@ -578,6 +578,92 @@ class NfsClient {
             return await axios(configs)
 
         } catch (err : any) {
+
+            const message :string  = err.response?.data?.message || err.message
+
+            if(message.includes('connect ETIMEDOUT')) {
+                return await this._fetchReTry({ 
+                    url , 
+                    data , 
+                    type , 
+                    error : err , 
+                    method,
+                    retry : 1
+                })
+            }
+
+            throw new Error(message)
+        }
+    }
+
+    private async _fetchReTry ({ url , data , type = 'json' , method , error , retry = 1 } : { 
+        url : string , 
+        data : any, 
+        type ?: 'form-data' | 'stream' | 'json'
+        method ?: string 
+        error : Error
+        retry ?: number
+    }) : Promise<any> {
+
+        try {
+
+            if(retry > 3) {
+                throw error
+            }
+
+            await new Promise(ok => setTimeout(ok, (retry**2) * 1500))
+            
+            let headers = {
+                authorization : `Bearer ${this._authorization}`,
+                Connection: 'keep-alive'
+            }
+    
+            if(type === 'form-data') {
+                headers = {
+                    ...headers,
+                    ...data.getHeaders()
+                }
+            }
+    
+            const configs : Record<string,any> = {
+                url,
+                data,
+                headers,
+                method : method == null ? 'POST' : method,
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+                httpAgent : new http.Agent({
+                    keepAlive: true,
+                    timeout : 0,
+                    maxSockets: 100, 
+                    maxFreeSockets: 10,
+                }),
+                httpsAgent: new https.Agent({
+                    keepAlive: true,
+                    rejectUnauthorized: false,
+                    timeout : 0,
+                    maxSockets: 100,
+                    maxFreeSockets: 10,
+                }),
+                timeout : 0,
+                maxRate : [ Infinity , Infinity],
+                responseType : type
+            }
+    
+            return await axios(configs)
+
+        } catch (err : any) {
+
+            if(retry > 3) {
+                return await this._fetchReTry({
+                    url,
+                    data,
+                    type,
+                    method,
+                    error,
+                    retry : retry + 1
+                })
+            }
 
             const message  = err.response?.data?.message || err.message
 
