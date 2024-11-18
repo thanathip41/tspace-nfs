@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.14"></script>
   <title>NFS-Studio</title>
   <style>
     .folder-toggle {
@@ -94,27 +94,43 @@
             No Buckets available
           </div>
           <div id="tableContainer" class="hidden">
-            <div class="flex items-center space-x-3 p-4">
-          
-              <svg  onclick="window.location.reload()" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
-              </svg>
-              
-              <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
-              <span class="text-blue-600 px-3 py-1 font-mono">
-                <span id="currentPath"></span>
-              </span>
+            <div class="flex items-center justify-between p-4">
+              <div class="flex items-center space-x-3">
+                <svg onclick="window.location.reload()" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+                </svg>
+                <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
+                <span class="text-blue-600 px-3 py-1 font-mono">
+                  <span id="currentPath"></span>
+                </span>
+              </div>
+
+              <div class="mr-3">
+                <span class="font-semibold text-gray-800 dark:text-gray-200 mr-3" id="currentFiles"></span>
+                <button id="download" class="px-3 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">
+                  Download
+                </button>
+
+                <button id="delete" class="px-3 py-2 bg-red-500 dark:bg-red-700 rounded-md text-gray-800 dark:text-white">
+                  Delete
+                </button>
+
+              </div>
+
             </div>
-    
+            
             <div class="overflow-x-auto">
               <table class="table-auto w-full bg-white dark:bg-gray-800">
                 <thead>
                   <tr>
-                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Name</th>
-                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Size</th>
-                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Type</th>
-                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
-                    <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
+                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">
+                      <input type="checkbox" id="filesSelectdAll" name="filesSelectdAll">
+                      File Name
+                    </th>
+                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
+                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
+                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="fileTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
@@ -132,12 +148,12 @@
         <table class="table-auto">
           <thead>
             <tr class="sticky top-0 bg-white dark:bg-gray-800">
-              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Directory</th>
-              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Name</th>
-              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Size</th>
-              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">File Type</th>
-              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
-              <th class="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Progress</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Directory</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Filename</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Progress</th>
             </tr>
           </thead>
           <tbody id="fileProgressTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
@@ -219,9 +235,13 @@
         selected : localStorage.getItem('lastPathDirectory') ?? '',
         remove   : '',
         edit     : ''
-      }
+      },
+      files : []
     },
     el : {
+      currentFiles          : $('#currentFiles'),
+      filesSelectdAll       : $('#filesSelectdAll'),
+      filesSelectd          : $$('.filesSelectd'),
       removeModal           : $('#removeModal'),
       removeYesBtnModal     : $('#removeYesBtnModal'),
       removeNoBtnModal      : $('#removeNoBtnModal'),
@@ -251,6 +271,8 @@
       storaged              : $('#storaged'),
       notifyContainer       : $('#notify-container'),
       errorMessage          : $('#errorMessage'),
+      download              : $('#download'),
+      delete                : $('#delete'),
       bucketToggle          : $$('.bucket-toggle'),
       folderToggle          : $$('.folder-toggle')
     }
@@ -271,6 +293,8 @@
     const row = document.createElement('tr');
     row.innerHTML += `
       <td class="px-4 py-2">
+        <input type="checkbox" disabled="disabled">
+        <label for="vehicle1"> ${folderName} </label><br> 
         <button class="text-blue-500" type="button" target="${$state.data.path.selected}/${folderName}" onclick="onLoadFile(event)"> ${folderName} </button>
       </td>
       <td class="px-4 py-2">-</td>
@@ -309,10 +333,12 @@
     const row = document.createElement('tr');
     row.innerHTML = `
       <td class="px-4 py-2">
-        ${file.isFolder 
-        ? `<button class="text-blue-500" type="button" target="${file.path}" onclick="onLoadFile(event)"> ${file.name} </button>`
+       <input class="filesSelected" type="checkbox" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)"> 
+       ${file.isFolder
+        ? `<button class="cursor-not-allowed" type="button"> ${file.name} </button>`
         : `<button class="cursor-pointer" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>`
-      }
+       }
+      
       </td>
       <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
       <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension}</td>
@@ -341,8 +367,6 @@
       </td>
     `;
     $state.el.fileTableBody.appendChild(row);
-
-    themeToggleMode()
   };
 
   function showTable() {
@@ -389,6 +413,10 @@
     tr.innerHTML = `
       <td class="px-4 py-2">
         <button class="text-blue-500" type="button" target="${file.directory}" onclick="onLoadFile(event)"> ${file.directory} </button>
+      </td>
+      <td class="px-4 py-2"> 
+        <input type="checkbox" id="vehicle1" name="vehicle1" value="Bike">
+        <label for="vehicle1"> ${file.name} </label><br> 
       </td>
       <td class="px-4 py-2">${file.name}</td>
       <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
@@ -459,6 +487,8 @@
 
     const files = res.files;
 
+    $state.data.files = files.map(file => ({...file , selected : false }))
+
     $state.el.fileTableBody.innerHTML = ''
 
     await sleep(300);
@@ -469,7 +499,12 @@
       addFileToTable(file);
     }
 
+    themeToggleMode()
+
+    currentTotalFiles()
+
     hideLoading()
+    
 
     let link = []
     let currentTarget = []
@@ -579,6 +614,20 @@
 
       await notify({ type : 'error' , message : error.message })
     }
+  }
+
+  function onFileSelected(e) {
+    const checked = e.target.checked
+    const path = normalizePath(e.currentTarget.getAttribute('target'));
+    
+    $state.data.files = $state.data.files.map(file => {
+      if(normalizePath(file.path) === path) {
+        return {...file , selected : checked  }
+      }
+      return file
+    })
+
+    currentTotalFiles({ selected : true })
   }
   
   function onPreview(e) {
@@ -800,6 +849,55 @@
     });
   }
 
+  function currentTotalFiles ({ selected = false, forceAll = false , unForceAll = false } = {}) {
+
+    if(forceAll) {
+      $state.data.files = $state.data.files.map(file => ({...file, selected : true }))
+    }
+
+    if(unForceAll) {
+      $state.data.files = $state.data.files.map(file => ({...file, selected : false  }))
+    }
+   
+    const data = $state.data.files.map(file => {
+      if(file.hasOwnProperty('folders')) {
+        delete file.folders
+      }
+      return file
+    })
+
+    const { count, totalSize , file , folder } = data
+    .filter((file) => {
+      if(selected) {
+        return file.selected
+      }
+      return true
+    })
+    .reduce(
+      (acc, file) => ({
+        count: acc.count + 1,
+        file : !file.isFolder ? acc.file + 1 : acc.file,
+        folder : file.isFolder ? acc.folder + 1 : acc.folder,
+        totalSize: acc.totalSize + (file.size || 0),
+      }),
+      { count: 0, totalSize: 0 , file : 0 , folder : 0 }
+    );
+
+    const formatSize = (size) => {
+      const units = ["B", "KB", "MB", "GB"];
+      let unitIndex = 0;
+
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+      }
+
+      return `${size.toFixed(2)}${units[unitIndex]}`;
+    };
+
+    $state.el.currentFiles.textContent = `${selected ? 'Selected' : ''} ${file} files and ${folder} directories . Total size ${formatSize(totalSize)}`
+  }
+
   function normalizePath (path) {
     return `${path.replace(/^\/+/, '')}`;
   }
@@ -841,6 +939,7 @@
   }
 
   function themeToggleMode() {
+  
     const theme = $state.data.theme()
     const isDark = theme === 'dark'
     const prefixToReplace = isDark ? 'light:' : 'dark:';
@@ -865,6 +964,7 @@
         }
       })
     }
+
   }
 
   
@@ -876,11 +976,8 @@
    
     const isDark = $state.data.theme() === 'dark'
    
-    console.log(isDark,$state.data.theme() , localStorage.getItem('theme'))
-
     localStorage.setItem('theme', isDark ? 'light' : 'dark' );
     
-    console.log(isDark,$state.data.theme() , localStorage.getItem('theme'))
     $state.el.toggleIcon.innerHTML = isDark 
     ? `
       <path fill-rule="evenodd" d="M11.675 2.015a.998.998 0 0 0-.403.011C6.09 2.4 2 6.722 2 12c0 5.523 4.477 10 10 10 4.356 0 8.058-2.784 9.43-6.667a1 1 0 0 0-1.02-1.33c-.08.006-.105.005-.127.005h-.001l-.028-.002A5.227 5.227 0 0 0 20 14a8 8 0 0 1-8-8c0-.952.121-1.752.404-2.558a.996.996 0 0 0 .096-.428V3a1 1 0 0 0-.825-.985Z" clip-rule="evenodd"/>
@@ -918,6 +1015,15 @@
     const items = e.dataTransfer.items;
 
     const files = await handleDropItems(items)
+
+    if(!files.length) {
+
+      notify({
+        type : 'warning',
+        message : 'Please choose any files for upload'
+      })
+      return
+    }
 
     const folders = [...new Set(files
     .filter(v => v.directory !== '')
@@ -961,6 +1067,7 @@
 
     await fetchBucket()
     await fetchStorage()
+    await fetchFiles($state.data.path.selected)
   
   })
   
@@ -1055,7 +1162,7 @@
         secret  : $state.el.secret.value
       }
 
-      if([payload.bucket ,payload.token , payload.secret].some(v => v == null || v ==='')) {
+      if([payload.bucket].some(v => v == null || v ==='')) {
         throw new Error('Please enter a bucket token and secret')
       }
 
@@ -1072,7 +1179,8 @@
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        const err = await response.json()
+        throw new Error(err.message)
       }
 
       hideLoading()
@@ -1080,7 +1188,6 @@
       $state.el.bucketModal.classList.add('hidden');
       
       await fetchBucket()
-
 
       await notify({
         type : 'success',
@@ -1103,14 +1210,37 @@
     $state.el.bucketModal.classList.add('hidden');
   });
 
+  $state.el.download.addEventListener('click', () => {
+    alert('download all :' + $state.data.files.length)
+  });
+
+  $state.el.delete.addEventListener('click', () => {
+    alert('delete all :' + $state.data.files.length)
+  });
+  
+  $state.el.filesSelectdAll.addEventListener('change', (event) => {
+    const checked = event.target.checked
+
+    const checkboxes = document.querySelectorAll('.filesSelected')
+      checkboxes.forEach(checkbox => {
+      checkbox.checked = checked;
+    })
+
+    
+    currentTotalFiles({ selected : checked, forceAll : checked , unForceAll : !checked })
+  })
+
   document.addEventListener('DOMContentLoaded', async () => {
     
     checkTableStatus();
+   
     await fetchBucket();
     await fetchStorage();
+   
     themeToggleMode();
 
     if($state.data.path.selected) await fetchFiles($state.data.path.selected)
+
   })
   
 </script>

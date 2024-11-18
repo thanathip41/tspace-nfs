@@ -82,7 +82,7 @@ class NfsClient {
     /**
      * The 'default' method is used to default prefix the directory every path
      * 
-     * @param {string} directory
+     * @param   {string} directory
      * @returns {this} 
      */
     default(directory : string): this {
@@ -95,7 +95,7 @@ class NfsClient {
     /**
      * The 'onError' method is used to handle the error that occurs when trying connect to nfs server
      * 
-     * @param {Function} callback 
+     * @param   {Function} callback 
      * @returns {this} 
      */
     onError (callback : (err : any , nfs : NfsClient) => void): this {
@@ -106,7 +106,7 @@ class NfsClient {
     /**
      * The 'onConnect' method is used cheke the connection to nfs server
      * 
-     * @param {Function} callback 
+     * @param   {Function} callback 
      * @returns {this} 
      */
     onConnect (callback : (nfs : NfsClient) => void): this {
@@ -117,7 +117,7 @@ class NfsClient {
     /**
      * The 'quit' method is used quit the connection and stop the serivce
      * 
-     * @return {never}
+     * @returns {never}
      */
     quit () : never {
         return process.exit(0)
@@ -131,7 +131,7 @@ class NfsClient {
      * @property {boolean}  options.download
      * @property {number}   options.expired // expires in seconds
      * @property {number}   options.exists // checks the file exists only
-     * @return   {promise<string>} 
+     * @returns  {promise<string>} 
      */
     async toURL (path : string , { download = true , expired , exists = false } : { download?: boolean; expired ?: number; exists ?: boolean } = {}) : Promise<string> {
 
@@ -184,7 +184,7 @@ class NfsClient {
      * The 'toBase64' method is used to converts a given file path to base64 encoded
      * 
      * @param    {string}   path 
-     * @return   {promise<string>} 
+     * @returns  {promise<string>} 
      */
     async toBase64 (path : string) : Promise<string> {
 
@@ -213,7 +213,7 @@ class NfsClient {
      * 
      * @param    {string}   path 
      * @param    {string?}   range
-     * @return   {promise<string>} 
+     * @returns  {Promise<string>} 
      */
     async toStream (path : string , range?: string) : Promise<Readable> {
         try {
@@ -247,7 +247,7 @@ class NfsClient {
      * @property {string}  obj.name
      * @property {string?} obj.folder
      * @property {number?} obj.chunkSize // unit mb  by default 200 mb
-     * @return   {promise<{size : number , path : string , name : string , url : string}>} 
+     * @returns  {Promise<{size : number , path : string , name : string , url : string}>} // size is bytes
      */
     async upload ({ file , name , extension , folder , chunkSize } : {
         file      :  string,
@@ -327,10 +327,13 @@ class NfsClient {
             .replace(this._directory,'')
             .replace(/^\/+/, '')
 
+            const file = response.data
+
             return {
-                ...response.data,
+                name : file.name,
                 url : await this.toURL(normalizedPath),
-                path : normalizedPath
+                path : normalizedPath,
+                size : file.size
             }
 
         } catch (err) {
@@ -360,7 +363,7 @@ class NfsClient {
      * @property {string}  obj.name
      * @property {string?} obj.folder
      * @property {number?} obj.chunkSize // unit mb  by default 200 mb
-     * @return   {promise<{size : number , path : string , name : string , url : string}>} 
+     * @returns  {Promise<{size : number , path : string , name : string , url : string}>} 
      */
     async save ({ file , name , extension , folder , chunkSize } : {
         file      :  string,
@@ -379,7 +382,7 @@ class NfsClient {
      * @property {string}  obj.base64
      * @property {string}  obj.name
      * @property {string?} obj.folder
-     * @return   {promise<{size : number , path : string , name : string}>} 
+     * @returns   {promise<{size : number , path : string , name : string}>} 
      */
       async uploadBase64 ({ base64 , name , extension , folder } : {
         base64    : string,
@@ -426,7 +429,7 @@ class NfsClient {
      * @property {string}  obj.base64
      * @property {string}  obj.name
      * @property {string?} obj.folder
-     * @return   {promise<{size : number , path : string , name : string}>} 
+     * @returns  {Promise<{size : number , path : string , name : string}>} 
      */
     async saveAs ({ base64 , name , extension , folder } : {
         base64    : string,
@@ -441,7 +444,7 @@ class NfsClient {
      * The 'delete' method is used to delete a file
      * 
      * @param    {string}   path 
-     * @return   {promise<string>} 
+     * @returns   {promise<string>} 
      */
     async delete (path : string ) : Promise<void> {
 
@@ -470,7 +473,7 @@ class NfsClient {
      * The 'remove' method is used to delete a file
      * 
      * @param    {string}   path 
-     * @return   {promise<string>} 
+     * @returns  {promise<string>} 
      */
     async remove (path : string ) : Promise<void> {
         return await this.delete(path);
@@ -480,7 +483,7 @@ class NfsClient {
      * The 'storage' method is used to get information about the storage
      * 
      * @param    {string?}  folder
-     * @return   {Promise<{name : string , size : number }[]>} 
+     * @returns   {Promise<{name : string , size : number }[]>} 
      */
     async storage (folder ?: string ) : Promise<{name : string , size : number }[]> {
 
@@ -507,7 +510,7 @@ class NfsClient {
     /**
      * The 'folders' method is used to get list of folders
      * 
-     * @return   {Promise<{name : string , size : number }[]>} 
+     * @returns {Promise<{name : string , size : number }[]>} 
      */
     async folders () : Promise<{name : string , size : number }[]> {
 
