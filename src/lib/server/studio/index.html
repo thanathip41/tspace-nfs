@@ -149,11 +149,12 @@
           <thead>
             <tr class="sticky top-0 bg-white dark:bg-gray-800">
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Directory</th>
-              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Filename</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Name</th>
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Progress</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Upload (mb/s)</th>
             </tr>
           </thead>
           <tbody id="fileProgressTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
@@ -333,12 +334,11 @@
     const row = document.createElement('tr');
     row.innerHTML = `
       <td class="px-4 py-2">
-       <input class="filesSelected" type="checkbox" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)"> 
-       ${file.isFolder
-        ? `<button class="cursor-not-allowed" type="button"> ${file.name} </button>`
-        : `<button class="cursor-pointer" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>`
+          <input class="filesSelected" type="checkbox" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)"> 
+          ${file.isFolder
+            ? `<button class="cursor-pointer" type="button" target="${file.path}" onclick="onLoadFile(event)"> ${file.name} </button>`
+            : `<button class="cursor-pointer" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>`
        }
-      
       </td>
       <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
       <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension}</td>
@@ -398,14 +398,15 @@
     return await new Promise(r => setTimeout(r, ms))
   }
 
-  function updateFileProgress(file, progress) {
+  function updateFileProgress({ file, progress, uploadSpeed }) {
     const rows = Array.from(fileProgressTableBody.children);
     const row = rows.find(r => {
-      return String(r.cells[0].textContent).trim() === file.directory && String(r.cells[1].textContent).trim() === file.name
+      return String(r.cells[0].textContent).trim() === file.directory && String(r.cells[1].textContent).trim() === file.name;
     })
 
     if(row) {
-      row.cells[5].innerHTML = `<progress value="${progress}" max="100"></progress> ${progress}%`
+      row.cells[5].innerHTML = `<progress value="${progress}" max="100"></progress> ${progress}%`;
+      row.cells[6].innerHTML = `${uploadSpeed} mb/s`;
       return
     }
 
@@ -415,45 +416,60 @@
         <button class="text-blue-500" type="button" target="${file.directory}" onclick="onLoadFile(event)"> ${file.directory} </button>
       </td>
       <td class="px-4 py-2"> 
-        <input type="checkbox" id="vehicle1" name="vehicle1" value="Bike">
-        <label for="vehicle1"> ${file.name} </label><br> 
+        <button class="cursor-pointer" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>  
       </td>
-      <td class="px-4 py-2">${file.name}</td>
       <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
       <td class="px-4 py-2">${file.extension}</td>
       <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
       <td class="px-4 py-2"> <progress value="${progress}" max="100"></progress> ${progress}% </td>
+      <td class="px-4 py-2"> ${uploadSpeed} mb/s </td>
     `;
+
     $state.el.fileProgressTableBody.appendChild(tr);
     
   };
 
-  async function fetchUploadFile(file , path) {
-
+  async function fetchUploadFile(file, path) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${$state.data.url}/studio/api/upload`, true);
 
+        let lastTime = Date.now();
+        let lastLoaded = 0;
+
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
                 const progress = ((e.loaded / e.total) * 100).toFixed(2);
+
+                const currentTime = Date.now();
+                const elapsedTime = (currentTime - lastTime) / 1000;
+                const bytesUploaded = e.loaded - lastLoaded;
+
+                const uploadSpeed = (bytesUploaded / 1024 / 1024) / elapsedTime;
+
                 updateFileProgress({
+                  file : {
                     name: file.name,
                     size: file.size,
                     extension: String(file.name)?.split('.').pop(),
                     lastModified: new Date().toJSON(),
-                    directory: path.replace(`/${file.name}`, '')
-                }, +progress);
+                    directory: path.replace(`/${file.name}, ''`),
+                  },
+                  progress : +progress,
+                  uploadSpeed: uploadSpeed.toFixed(2)
+                });
+                
+
+                lastTime = currentTime;
+                lastLoaded = e.loaded;
             }
         };
 
         xhr.onload = async () => {
             if (xhr.status === 200) {
                 notify({ type: 'success', message: `The file '${file.name}' has been uploaded.` });
-
-                return resolve(true)
+                return resolve(true);
             }
-
             return reject(new Error(`Upload failed with status ${xhr.status}`));
         };
 
@@ -467,8 +483,7 @@
         formData.append('path', path);
         xhr.send(formData);
     });
-
-  };
+  }
 
   async function fetchFiles (target) {
     if(target == null || target === '') return
