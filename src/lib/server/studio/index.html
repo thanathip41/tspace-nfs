@@ -96,7 +96,7 @@
           <div id="tableContainer" class="hidden">
             <div class="flex items-center justify-between p-4">
               <div class="flex items-center space-x-3">
-                <svg onclick="window.location.reload()" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <svg onclick="onReload(event)" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
                   <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
                 </svg>
                 <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
@@ -124,8 +124,32 @@
                 <thead>
                   <tr>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">
-                      <input type="checkbox" id="filesSelectdAll" name="filesSelectdAll">
-                      File Name
+                    
+                      <div class="flex items-center space-x-2">
+                        <label class="cursor-pointer">
+                          <input type="checkbox" id="filesSelectdAll" type="checkbox" class="hidden peer" />
+                          <svg
+                            class="w-5 h-5 border-2 rounded peer-checked:border-blue-500 peer-checked:bg-blue-500"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path
+                            id="path-checked"
+                            class="hidden stroke-current text-white"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                          </svg>
+                        </label>
+                        <span> File Name</span>
+                      </div>
+                      
+                      <!-- <input type="checkbox" id="filesSelectdAll" name="filesSelectdAll"> -->
+                      <!-- File Name -->
                     </th>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
@@ -334,11 +358,29 @@
     const row = document.createElement('tr');
     row.innerHTML = `
       <td class="px-4 py-2">
-          <input class="filesSelected" type="checkbox" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)"> 
+        <div class="space-x-3">
           ${file.isFolder
-            ? `<button class="cursor-pointer" type="button" target="${file.path}" onclick="onLoadFile(event)"> ${file.name} </button>`
-            : `<button class="cursor-pointer" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>`
-       }
+            ? `
+            <label class="flex cursor-pointer">
+              <input type="checkbox" class="filesSelected hidden peer" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
+              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 8H4m0-2v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"/>
+              </svg>
+              <button class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" type="button" target="${file.path}" onclick="onLoadFile(event)"> ${file.name} </button>
+            </label>
+           
+            `
+            : `
+            <label class="flex cursor-pointer">
+              <input type="checkbox" class="filesSelected hidden peer"  value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
+              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M10 3v4a1 1 0 0 1-1 1H5m14-4v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7.914a1 1 0 0 1 .293-.707l3.914-3.914A1 1 0 0 1 9.914 3H18a1 1 0 0 1 1 1Z"/>
+              </svg>
+              <button class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>
+            </label>
+           `
+          }
+        </div>
       </td>
       <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
       <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension}</td>
@@ -429,6 +471,69 @@
     
   };
 
+  async function fetchDownloadFiles() {
+
+    try {
+
+      const files = $state.data.files.filter(v => v.selected)
+
+      if(!files.length) {
+
+        notify({ type : 'error' , message : 'Please specify which files to download.'})
+
+        return
+      }
+
+      showLoading();
+      const response = await fetch(`${$state.data.url}/studio/api/download`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          files
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'downloaded.zip';
+
+      if (contentDisposition && contentDisposition.includes('filename=')) {
+        const match = contentDisposition.match(/filename="(.+?)"/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      const blob = await response.blob();
+
+      await sleep(300)
+          
+      hideLoading()
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+
+      console.log(err)
+      hideLoading()
+      notify({ type : 'error' , message : err.message })
+    }
+    
+  }
+
+ 
   async function fetchUploadFile(file, path) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -485,7 +590,7 @@
     });
   }
 
-  async function fetchFiles (target) {
+  async function fetchFiles(target) {
     if(target == null || target === '') return
 
     showLoading();
@@ -616,7 +721,30 @@
   async function onLoadFile (e) {
     try {
 
-      const path = normalizePath(e.currentTarget.getAttribute('target'))
+      let path = normalizePath(e.currentTarget.getAttribute('target'))
+
+      if(path == '' || path == null) {
+
+        path = $state.data.path.selected
+      }
+  
+      await fetchFiles(path)
+
+      await notify({
+        type : 'success',
+        message : `The directory '${path}' has been loaded!`
+      })
+
+    } catch (error) {
+
+      await notify({ type : 'error' , message : error.message })
+    }
+  }
+
+  async function onReload (e) {
+    try {
+
+      let path = $state.data.path.selected
   
       await fetchFiles(path)
 
@@ -1226,11 +1354,17 @@
   });
 
   $state.el.download.addEventListener('click', () => {
-    alert('download all :' + $state.data.files.length)
+    fetchDownloadFiles()
   });
 
-  $state.el.delete.addEventListener('click', () => {
-    alert('delete all :' + $state.data.files.length)
+  $state.el.delete.addEventListener('click', async() => {
+    const files = $state.data.files.filter(v => v.selected)
+
+    for (const file of files) {
+      await fetchRemove(file.path)
+    }
+
+    await onReload()
   });
   
   $state.el.filesSelectdAll.addEventListener('change', (event) => {
@@ -1241,7 +1375,7 @@
       checkbox.checked = checked;
     })
 
-    
+    $('#path-checked').classList.toggle('hidden')
     currentTotalFiles({ selected : checked, forceAll : checked , unForceAll : !checked })
   })
 

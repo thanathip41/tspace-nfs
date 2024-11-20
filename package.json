@@ -41,7 +41,7 @@
     "html-minifier-terser": "7.2.0",
     "jsonwebtoken": "9.0.2",
     "node-cron": "^3.0.3",
-    "tspace-spear": "1.1.5",
+    "tspace-spear": "1.1.6",
     "tspace-utils": "1.0.4",
     "xml": "1.0.1"
   },

@@ -286,8 +286,7 @@ class NfsServer {
         router.put('/api/files/*', this._authStudioMiddleware,this._studioEdit)
         router.delete('/api/files/*', this._authStudioMiddleware,this._studioRemove)
         router.post('/api/upload',this._authStudioMiddleware,this._studioUpload)
-        router.post('/api/download',this._authStudioMiddleware,this._studioDownload)
-        router.post('/api/remove',this._authStudioMiddleware,this._studioRemoveAll)
+        router.post('/api/download',this._studioDownload)
 
         return router
       })
@@ -1368,99 +1367,36 @@ class NfsServer {
   private _studioDownload = async ({ req, res , body } : TContext) => {
     try {
 
-      const { download } = body
+      const { files } = body as { files : any[]}
 
-      // const [bucket, ...rest] = String(body.path).split('/')
+      if(!files?.length) {
 
-      // const allowBuckets : string = req.buckets || []
+        return res.badRequest('Please specify which files to download.')
+      }
 
-      // if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      //   return res.forbidden()
-      // }
-
-      // if(this._buckets != null && !(await this._buckets()).includes(bucket)) {
-      //   return res.forbidden()
-      // }
+      const items = files.map(v => {
+        return {
+          ...v,
+          path : this._normalizePath({ directory : this._rootFolder, path : String(v.path) , full : true })
+        }
+      })
       
-      // let folder = rest.join('/')
+      const archive = archiver('zip', { zlib: { level: 1 } });
 
-      const items = [
-        { name: 'file1.txt', path: pathSystem.join(pathSystem.resolve(), 'dev/file1.txt'), type: 'file' },
-        { name: 'folder1', path: pathSystem.join(pathSystem.resolve(), 'dev/folder1'), type: 'folder' },
-        { name: 'file2.jpg', path: pathSystem.join(pathSystem.resolve(), 'dev/file2.jpg'), type: 'file' },
-        { name: 'folder2', path: pathSystem.join(pathSystem.resolve(), 'dev/folder2'), type: 'folder' },
-    ];
-      
-      res.setHeader('Content-Disposition', 'attachment; filename="folders.zip"');
+      res.setHeader('Content-Disposition', `attachment; filename="NFS-studio_${+new Date()}.zip"`);
       res.setHeader('Content-Type', 'application/zip');
     
-      const archive = archiver('zip', { zlib: { level: 1 } });
-    
-      archive.pipe(res);
-    
+      archive.pipe(res)
+      
       for (const item of items) {
-        if (fsSystem.existsSync(item.path)) {
-            if (item.type === 'file') {
-                archive.file(item.path, { name: item.name });
-            } else if (item.type === 'folder') {
-                archive.directory(item.path, item.name);
-            }
-        } else {
-            console.warn(`Item not found: ${item.path}`);
-        }
-    }
+        if (item.isFolder) {
+          archive.directory(item.path, item.name);
+          continue
+        } 
+        archive.file(item.path, { name: item.name });
+      }
       
       archive.finalize();
-    
-
-      archive.on('error', err => {
-        console.error('Error creating ZIP:', err);
-        return res.error(err)
-      });
-
-      return res.ok({
-      
-      })
-
-    } catch (err) {
-
-      if(this._debug) {
-        console.log(err)
-      }
-
-      throw err
-    }
-  }
-
-  private _studioRemoveAll = async ({ req, res , files , body } : TContext) => {
-    try {
-
-      if(!Array.isArray(files?.file) || files?.file[0] == null) {
-        return res.badRequest('The file is required.')
-      }
-
-      if(body.path == null || body.path === '') {
-        return res.badRequest('The path is required.')
-      }
-
-      const file = files?.file[0]
-
-      const [bucket, ...rest] = String(body.path).split('/')
-
-      const allowBuckets : string = req.buckets || []
-
-      if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-        return res.forbidden()
-      }
-
-      if(this._buckets != null && !(await this._buckets()).includes(bucket)) {
-        return res.forbidden()
-      }
-      
-      
-      return res.ok({
-     
-      })
 
     } catch (err) {
 
@@ -2068,13 +2004,14 @@ class NfsServer {
     full ?: boolean 
   }): string {
 
+    path = path.replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
     const normalized = full 
     ? directory == null 
-      ?  pathSystem.join(pathSystem.resolve(),`${path.replace(/^\/+/, '')}`)
-      :  pathSystem.join(pathSystem.resolve(),`${directory}/${path.replace(/^\/+/, '')}`)
+      ?  pathSystem.join(pathSystem.resolve(),`${path}`)
+      :  pathSystem.join(pathSystem.resolve(),`${directory}/${path}`)
     : directory == null 
-      ? `${path.replace(/^\/+/, '')}`
-      : `${directory}/${path.replace(/^\/+/, '')}`
+      ? `${path}`
+      : `${directory}/${path}`
 
     return normalized
     
