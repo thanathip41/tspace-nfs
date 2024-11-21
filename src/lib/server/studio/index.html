@@ -94,30 +94,35 @@
             No Buckets available
           </div>
           <div id="tableContainer" class="hidden">
-            <div class="flex items-center justify-between p-4">
-              <div class="flex items-center space-x-3">
+            <div class="flex flex-wrap items-center justify-between p-4 gap-4">
+          
+              <div class="flex items-center space-x-3 flex-wrap sm:flex-nowrap">
                 <svg onclick="onReload(event)" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
                   <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
                 </svg>
                 <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
-                <span class="text-blue-600 px-3 py-1 font-mono">
+                <span class="text-blue-600 px-3 py-1 font-mono w-full sm:w-auto">
                   <span id="currentPath"></span>
                 </span>
               </div>
-
-              <div class="mr-3">
-                <span class="font-semibold text-gray-800 dark:text-gray-200 mr-3" id="currentFiles"></span>
-                <button id="download" class="px-3 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">
+            
+              <div class="flex flex-wrap items-center gap-2 sm:gap-3 justify-end">
+                <span class="font-semibold text-gray-800 dark:text-gray-200 w-full sm:w-auto text-center" id="currentFiles"></span>
+                <button 
+                  id="download" 
+                  class="px-3 py-2 w-full sm:w-auto bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md text-center"
+                >
                   Download
                 </button>
-
-                <button id="delete" class="px-3 py-2 bg-red-500 dark:bg-red-700 rounded-md text-gray-800 dark:text-white">
+                <button 
+                  id="delete" 
+                  class="px-3 py-2 w-full sm:w-auto bg-red-500 dark:bg-red-700 rounded-md text-gray-800 dark:text-white text-center"
+                >
                   Delete
                 </button>
-
               </div>
-
             </div>
+            
             
             <div class="overflow-x-auto">
               <table class="table-auto w-full bg-white dark:bg-gray-800">
@@ -178,7 +183,7 @@
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
               <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Progress</th>
-              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Upload (mb/s)</th>
+              <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Upload (per/s)</th>
             </tr>
           </thead>
           <tbody id="fileProgressTableBody" class="text-gray-700 dark:text-gray-300"></tbody>
@@ -303,6 +308,35 @@
     }
   }
 
+  function showTable() {
+    $state.el.tableContainer.classList.remove('hidden');
+    $state.el.noBucketMessage.classList.add('hidden');
+  };
+
+  function hideTable() {
+    $state.el.tableContainer.classList.add('hidden');
+    $state.el.noBucketMessage.classList.remove('hidden');
+    
+  };
+
+  function checkTableStatus() {
+    if ($state.el.fileTableBody.children.length === 0) {
+      hideTable();
+    }
+  };
+
+  function showLoading () {
+    $state.el.loading.style.display = 'flex';
+  }
+
+  function hideLoading () {
+    $state.el.loading.style.display = 'none';
+  }
+
+  async function sleep(ms = 500) {
+    return await new Promise(r => setTimeout(r, ms))
+  }
+
   function addFolderToTable(folderName) {
     
     const rows = Array.from(fileTableBody.children)
@@ -366,9 +400,12 @@
               <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 8H4m0-2v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"/>
               </svg>
-              <button class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" type="button" target="${file.path}" onclick="onLoadFile(event)"> ${file.name} </button>
+              <div class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" target="${file.path}" value="${file.name}" 
+                onclick="onFileSelected(event)" ondblclick="onLoadFile(event)"
+              > 
+                ${file.name} 
+              </div>
             </label>
-           
             `
             : `
             <label class="flex cursor-pointer">
@@ -376,26 +413,26 @@
               <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
                 <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M10 3v4a1 1 0 0 1-1 1H5m14-4v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7.914a1 1 0 0 1 .293-.707l3.914-3.914A1 1 0 0 1 9.914 3H18a1 1 0 0 1 1 1Z"/>
               </svg>
-              <button class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>
+              <div class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" target="${file.path}" value="${file.name}" 4
+                onclick="onFileSelected(event)" ondblclick="onPreview(event)"
+              > 
+                ${file.name} 
+              </div>
             </label>
            `
           }
         </div>
       </td>
-      <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
-      <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension}</td>
+      <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
+      <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension === '' || file.extension == null ? 'file' : file.extension}</td>
       <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
       <td class="flex gap-3 px-4 py-2">
-          ${file.isFolder 
-            ? ''
-            : `
-            <svg target="${file.path}" onclick="onPreview(event)"} 
-              class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-              <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
-            </svg>
-            `
-          }
-          
+         
+          <svg target="${file.path}" onclick="${file.isFolder ? 'onLoadFile(event)' : 'onPreview(event)'}"} 
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
+          </svg>
+            
           <svg target="${file.path}" onclick="onEdit(event)"} 
             class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
@@ -411,35 +448,6 @@
     $state.el.fileTableBody.appendChild(row);
   };
 
-  function showTable() {
-    $state.el.tableContainer.classList.remove('hidden');
-    $state.el.noBucketMessage.classList.add('hidden');
-  };
-
-  function hideTable() {
-    $state.el.tableContainer.classList.add('hidden');
-    $state.el.noBucketMessage.classList.remove('hidden');
-    
-  };
-
-  function checkTableStatus() {
-    if ($state.el.fileTableBody.children.length === 0) {
-      hideTable();
-    }
-  };
-
-  function showLoading () {
-    $state.el.loading.style.display = 'flex';
-  }
-
-  function hideLoading () {
-    $state.el.loading.style.display = 'none';
-  }
-
-  async function sleep(ms = 500) {
-    return await new Promise(r => setTimeout(r, ms))
-  }
-
   function updateFileProgress({ file, progress, uploadSpeed }) {
     const rows = Array.from(fileProgressTableBody.children);
     const row = rows.find(r => {
@@ -448,7 +456,7 @@
 
     if(row) {
       row.cells[5].innerHTML = `<progress value="${progress}" max="100"></progress> ${progress}%`;
-      row.cells[6].innerHTML = `${uploadSpeed} mb/s`;
+      row.cells[6].innerHTML = `${formatSize(uploadSpeed)}/s`;
       return
     }
 
@@ -460,11 +468,11 @@
       <td class="px-4 py-2"> 
         <button class="cursor-pointer" type="button" target="${file.path}" onclick="onPreview(event)"> ${file.name} </button>  
       </td>
-      <td class="px-4 py-2">${file.size != null ? `${(file.size / 1024 / 1024).toFixed(4)}MB` : '-'} </td>
+      <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
       <td class="px-4 py-2">${file.extension}</td>
       <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
       <td class="px-4 py-2"> <progress value="${progress}" max="100"></progress> ${progress}% </td>
-      <td class="px-4 py-2"> ${uploadSpeed} mb/s </td>
+      <td class="px-4 py-2"> ${formatSize(uploadSpeed)}/s </td>
     `;
 
     $state.el.fileProgressTableBody.appendChild(tr);
@@ -550,7 +558,7 @@
                 const elapsedTime = (currentTime - lastTime) / 1000;
                 const bytesUploaded = e.loaded - lastLoaded;
 
-                const uploadSpeed = (bytesUploaded / 1024 / 1024) / elapsedTime;
+                const uploadSpeed = (bytesUploaded) / elapsedTime;
 
                 updateFileProgress({
                   file : {
@@ -558,10 +566,11 @@
                     size: file.size,
                     extension: String(file.name)?.split('.').pop(),
                     lastModified: new Date().toJSON(),
-                    directory: path.replace(`/${file.name}, ''`),
+                    directory: path.replace(`/${file.name}`, ''),
+                    path : [path , file.name].join('/')
                   },
                   progress : +progress,
-                  uploadSpeed: uploadSpeed.toFixed(2)
+                  uploadSpeed: uploadSpeed.toFixed(4)
                 });
                 
 
@@ -992,6 +1001,20 @@
     });
   }
 
+  function formatSize (size) {
+    const units = ["KB", "MB", "GB"];
+    let unitIndex = 0;
+
+    size = Number.isNaN(Number(size)) ? 0 : Number(size) / 1024
+   
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size = size / 1024;
+      unitIndex++;
+    }
+
+    return `${size.toFixed(4)} ${units[unitIndex]}`;
+  };
+
   function currentTotalFiles ({ selected = false, forceAll = false , unForceAll = false } = {}) {
 
     if(forceAll) {
@@ -1024,22 +1047,12 @@
         totalSize: acc.totalSize + (file.size || 0),
       }),
       { count: 0, totalSize: 0 , file : 0 , folder : 0 }
-    );
-
-    const formatSize = (size) => {
-      const units = ["B", "KB", "MB", "GB"];
-      let unitIndex = 0;
-
-      while (size >= 1024 && unitIndex < units.length - 1) {
-        size /= 1024;
-        unitIndex++;
-      }
-
-      return `${size.toFixed(2)}${units[unitIndex]}`;
-    };
+    )
 
     $state.el.currentFiles.textContent = `${selected ? 'Selected' : ''} ${file} files and ${folder} directories . Total size ${formatSize(totalSize)}`
   }
+
+    
 
   function normalizePath (path) {
     return `${path.replace(/^\/+/, '')}`;
@@ -1364,6 +1377,7 @@
       await fetchRemove(file.path)
     }
 
+    await sleep(1500)
     await onReload()
   });
   

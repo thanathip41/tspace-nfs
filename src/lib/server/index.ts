@@ -1555,8 +1555,8 @@ class NfsServer {
       return res.notFound(`The directory '${path}' does not exist`)
     }
 
-    const files = this._fileStructure(targetDir , { includeFiles : true })
-
+    const files = await this._fileStructure(targetDir , { includeFiles : true })
+    
     return res.ok({
       files : files.sort((a, b) => {
         if (a.isFolder !== b.isFolder) {
@@ -1657,7 +1657,7 @@ class NfsServer {
       
   }
 
-  private _fileStructure = (dirPath: string , { includeFiles = false } : { includeFiles ?: boolean} = {}): any[] => {
+  private _fileStructure = async (dirPath: string , { includeFiles = false } : { includeFiles ?: boolean} = {}): Promise<any[]> => {
     const items: any[] = [];
 
     const files = fsSystem.readdirSync(dirPath)
@@ -1676,7 +1676,16 @@ class NfsServer {
             path: path.replace(/\\/g, '/').replace(`${this._rootFolder}/`,''),
             isFolder: true,
             lastModified,
-            folders: this._fileStructure(path , { includeFiles }),
+            folders: await this._fileStructure(path , { includeFiles }),
+            size : (await this._files(fullPath , { ignore : this._trash }))
+            .map(v => {
+              const stat = fsSystem.statSync(v)
+              const size = stat.size
+              return size
+            })
+            .reduce((prev , curr) => {
+              return prev + curr
+            },0)
         })
 
         continue
