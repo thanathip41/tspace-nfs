@@ -595,7 +595,7 @@ class NfsClient {
                 })
             }
 
-            throw new Error(message)
+            throw new Error(err.message)
         }
     }
 
@@ -743,6 +743,26 @@ class NfsClient {
             throw new Error('Failed to connect to nfs server, Please check your credentials and try again.')
         }
     }
+
+    // private async _upload (form : FormData) : Promise<{ size : number , path : string , name : string , url : string }> {
+
+    //     try {
+
+    //         const url = this._URL(this._ENDPOINT_UPLOAD)
+
+    //         const response = await this._fetch({
+    //             url,
+    //             data : form,
+    //             type : 'form-data'
+    //         })
+
+    //         return response
+
+    //     } catch (e) {
+
+    //     }
+       
+    // }
 
     private _normalizeFilename ({ name , extension } : { name : string , extension ?: string | null }): string {
 
