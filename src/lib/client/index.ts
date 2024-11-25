@@ -13,8 +13,6 @@ import { Time }       from 'tspace-utils'
  * The 'NfsClient' class is a client for nfs server
  * @example
  * import { NfsClient } from "tspace-nfs";
- * import PathSystem from 'path';
- * import pathSystem from 'path';
  *
  *   const nfs = new NfsClient({
  *      token     : '<YOUR TOKEN>',   // token
@@ -43,6 +41,7 @@ class NfsClient {
     private _url                        = 'http://localhost:8000'
     private _fileExpired                =  60 * 60
     private _ENDPOINT_CONNECT           = 'connect'
+    private _ENDPOINT_HEALTH_CHECK      = 'health-check'
     private _ENDPOINT_REMOVE            = 'remove'
     private _ENDPOINT_FILE              = 'file'
     private _ENDPOINT_FILE_BASE64       = 'base64'
@@ -60,11 +59,12 @@ class NfsClient {
         bucket : ''
     }
 
-    constructor({ token, secret, bucket, url } : { 
-        token  : string; 
-        secret : string; 
-        bucket : string;
-        url    : string;
+    constructor({ token, secret, bucket, url, connected = true } : { 
+        token     : string; 
+        secret    : string; 
+        bucket    : string;
+        url       : string;
+        connected ?: boolean;
     }) {
 
         this._credentials = {
@@ -75,8 +75,9 @@ class NfsClient {
 
         this._url = url
        
-        this._getConnect(this._credentials)
-
+        if(connected) {
+            this._getConnect(this._credentials)
+        }
     }
 
     /**
@@ -257,6 +258,8 @@ class NfsClient {
         chunkSize ?: number
     }) : Promise<{ size : number , path : string , name : string , url : string }> {
 
+        await this._healthCheck()
+
         const CHUNK_SIZE = 1024 * 1024 * (chunkSize == null ? 200 : chunkSize)
         const stats = fsSystem.statSync(file)
         const fileSize = stats.size
@@ -269,7 +272,7 @@ class NfsClient {
         let partNumber = 0
 
         const files : string[] = []
-    
+
         for await (const chunk of fileStream) {
 
             partNumber++
@@ -327,13 +330,13 @@ class NfsClient {
             .replace(this._directory,'')
             .replace(/^\/+/, '')
 
-            const file = response.data
+            const data = response.data
 
             return {
-                name : file.name,
+                name : data.name,
                 url : await this.toURL(normalizedPath),
                 path : normalizedPath,
-                size : file.size
+                size : data.size
             }
 
         } catch (err) {
@@ -526,9 +529,9 @@ class NfsClient {
             return response.data?.folders ?? []
  
         } catch (err) {
-             return await this._retryConnect(err, async () => {
-                 return await this.folders()
-             })
+            return await this._retryConnect(err, async () => {
+                return await this.folders()
+            })
         }
     }
 
@@ -577,12 +580,12 @@ class NfsClient {
                 maxRate : [ Infinity , Infinity],
                 responseType : type
             }
-    
+
             return await axios(configs)
 
         } catch (err : any) {
 
-            const message :string  = err.response?.data?.message || err.message
+            const message = this._errorMessage(err)
 
             if(message.includes('connect ETIMEDOUT')) {
                 return await this._fetchReTry({ 
@@ -595,7 +598,7 @@ class NfsClient {
                 })
             }
 
-            throw new Error(err.message)
+            throw err
         }
     }
 
@@ -614,7 +617,7 @@ class NfsClient {
                 throw error
             }
 
-            await new Promise(ok => setTimeout(ok, (retry**2) * 1500))
+            await new Promise(ok => setTimeout(ok, (retry**2) * 1_500))
             
             let headers = {
                 authorization : `Bearer ${this._authorization}`,
@@ -668,10 +671,22 @@ class NfsClient {
                 })
             }
 
-            const message  = err.response?.data?.message || err.message
+            const message = this._errorMessage(err)
 
             throw new Error(message)
         }
+    }
+
+    private _errorMessage(err : any) {
+        const errorResponse = this._softJsonParse(err.response?.data)
+
+        let message :string = errorResponse?.message || err.message
+
+        if(typeof errorResponse === 'object') {
+            message = errorResponse.message
+        }
+        
+        return String(message)
     }
 
     private _URL (endpoint : string) : string {
@@ -712,9 +727,51 @@ class NfsClient {
         return
     }
 
+    private async _healthCheck () {
+        try {
+
+            const { data } = await this._fetch({
+                url : this._URL(this._ENDPOINT_HEALTH_CHECK),
+                data : {},
+                method : 'POST'
+            })
+
+            if(data.expire?.hours >= 0) {
+                await this._connection()
+            }
+
+            return
+
+        } catch (err : any) {
+
+            const message = this._errorMessage(err)
+
+            if(message.includes(this._TOKEN_EXPIRED_MESSAGE)) {
+                await this._connection()
+                return
+            }
+
+            throw err
+        }
+    }
+    private async _connection() {
+
+        const response = await axios({
+            url : this._URL(this._ENDPOINT_CONNECT),
+            data : { 
+                ...this._credentials
+            },
+            method : 'POST'
+        })
+        
+        this._authorization = response.data?.accessToken
+
+        return
+    }
+
     private async _retryConnect (err : any ,fn : Function) {
 
-        const message  = err.response?.data?.message || err.message
+        const message = this._errorMessage(err)
 
         if(message !== this._TOKEN_EXPIRED_MESSAGE) {
             if(message.includes('connect ECONNREFUSED')) {
@@ -726,43 +783,15 @@ class NfsClient {
 
         try {
 
-            const response = await axios({
-                url : this._URL(this._ENDPOINT_CONNECT),
-                data : { 
-                    ...this._credentials
-                },
-                method : 'POST'
-            })
-            
-            this._authorization = response.data?.accessToken
+            await this._connection()
     
             return await fn()
 
         } catch (err : any) {
 
-            throw new Error('Failed to connect to nfs server, Please check your credentials and try again.')
+            throw err
         }
     }
-
-    // private async _upload (form : FormData) : Promise<{ size : number , path : string , name : string , url : string }> {
-
-    //     try {
-
-    //         const url = this._URL(this._ENDPOINT_UPLOAD)
-
-    //         const response = await this._fetch({
-    //             url,
-    //             data : form,
-    //             type : 'form-data'
-    //         })
-
-    //         return response
-
-    //     } catch (e) {
-
-    //     }
-       
-    // }
 
     private _normalizeFilename ({ name , extension } : { name : string , extension ?: string | null }): string {
 
@@ -786,6 +815,18 @@ class NfsClient {
         ).replace(/\/\//g, "/")
 
         return normalized
+    }
+
+    private _softJsonParse (data : any) {
+        try {
+
+            if(typeof data === 'string') return JSON.parse(data)
+
+            return data
+        } catch (e) {
+
+            return data
+        }
     }
 }
 

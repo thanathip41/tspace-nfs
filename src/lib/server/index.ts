@@ -259,6 +259,7 @@ class NfsServer {
 
     this._router.groups('/api' , (router) => {
       router.post('/connect', this._apiConnect)
+      router.post('/health-check' ,this._apiHealthCheck)
       router.post('/storage', this._authMiddleware ,this._apiStorage)
       router.post('/file',    this._authMiddleware ,this._apiFile)
       router.post('/folders', this._authMiddleware ,this._apiFolders)
@@ -268,6 +269,7 @@ class NfsServer {
       router.post('/upload',  this._authMiddleware ,this._apiUpload)
       router.post('/upload/merge',  this._authMiddleware ,this._apiMerge)
       router.post('/upload/base64', this._authMiddleware ,this._apiUploadBase64)
+    
       return router
     })
 
@@ -761,7 +763,7 @@ class NfsServer {
     } catch (err) {
 
       if(this._debug) {
-        console.log(err)
+        console.log(err,'here!')
       }
 
       throw err
@@ -854,7 +856,7 @@ class NfsServer {
           next()
         })
       }
-
+      
       const to = this._normalizePath({ directory , path : name , full : true })
       
       await writeFile(to)
@@ -1009,6 +1011,57 @@ class NfsServer {
         algorithm : 'HS256'
       })
     })
+  }
+
+  private _apiHealthCheck = async ({ res , headers } : TContext) => {
+
+    const token = String(headers.authorization).split(' ')[1]
+
+    if(token == null) {
+      return res.status(401).json({
+        message : 'Please check your credentials. Are they valid ?'
+      })
+    }
+
+    const payload = token.split('.')[1]
+
+    if(payload == null || payload === '') {
+      return res.status(401).json({
+        message : 'Please check your credentials. Are they valid ?'
+      })
+    }
+
+    const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
+  
+    if (decodedPayload.exp) {
+      const currentTime = Math.floor(Date.now() / 1000)
+      const timeRemaining = decodedPayload.exp - currentTime
+  
+      if (timeRemaining > 0) {
+
+        const days = Math.floor(timeRemaining / (24 * 60 * 60))
+        const hours = Math.floor((timeRemaining % (24 * 60 * 60)) / (60 * 60))
+        const minutes = Math.floor((timeRemaining % (60 * 60)) / 60)
+        const seconds = timeRemaining % 60;
+       
+        return res.json({
+          iat: new Date(decodedPayload.iat * 1000),
+          exp: new Date(decodedPayload.exp * 1000),
+          expire : {
+            days,
+            hours,
+            minutes,
+            seconds
+          }
+        })
+      }
+
+      return res.badRequest('Token has expired')
+
+    } 
+
+    return res.badRequest("Token does not have an expiration time.")
+
   }
 
   private _studio = async ({  res , cookies } : TContext) => {
