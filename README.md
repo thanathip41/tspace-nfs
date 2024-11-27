@@ -93,6 +93,9 @@ new NfsServer()
   ]
   return lists.every(list => list.bucket === bucket && list.secret === secret && list.token === token)
 })
+.onMonitors(async ({ host, memory , cpu }) => {
+  console.log({ host,  memory , cpu })
+})
 .progress() // view the progress of the file upload.
 .defaultPage(`<b> hello nfs-server! </b>`)
 .directory('upload') // by default nfs

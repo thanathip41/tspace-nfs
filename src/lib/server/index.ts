@@ -9,6 +9,7 @@ import archiver     from 'archiver'
 import { Server }   from 'http'
 import { Time }     from 'tspace-utils'
 import { minify }   from 'html-minifier-terser'
+import os           from 'os'
 import { 
   type TContext, 
   type TNextFunction,
@@ -28,16 +29,17 @@ import html  from './default-html'
  */
 class NfsServer {
 
+  private _buckets                  !: Function | null
   private _credentials              !: ({ token , secret , bucket } : { token : string; secret : string; bucket : string}) => Promise<boolean> | null
   private _onStudioBucketCreated    ?: ({ bucket , secret , token } : { token : string; secret : string; bucket : string}) => Promise<void> | null
   private _onStudioCredentials      ?: ({ username, password } : { username : string; password : string }) => Promise<{ logged : boolean , buckets : string[] }> | null
   private _onLoadBucketCredentials  ?: () => Promise<{ token : string; secret : string; bucket : string}[]>
+  private _monitors                 ?: ({ host, memory , cpu } : { host : string | null; memory : {  total : number;heapTotal : number;heapUsed: number },cpu : { total : number;max: number;min: number;avg: number;speed: number }}) => Promise<void>
 
   private _queue          = new Queue(3)
   private _app            !: Spear
   private _router         !: Router 
   private _html           !: string | null
-  private _buckets        !: Function | null
   private _fileExpired    : number = 60 * 60
   private _rootFolder     : string = 'nfs'
   private _jwtExipred     : number = 60 * 60
@@ -187,6 +189,34 @@ class NfsServer {
   } 
 
   /**
+   * The 'onMonitors' is method used to monitors the server.
+   * 
+   * @param    {function} callback
+   * @returns  {this}
+   */
+  onMonitors (callback : ({ host, memory , cpu } : { 
+    host : string | null 
+    memory : { 
+      total     : number // total
+      heapTotal : number // MB
+      heapUsed  : number // MB
+    }  
+    cpu :  {
+      total : number // total
+      max   : number // %
+      min   : number // %
+      avg   : number // %
+      speed : number // GHz
+    }
+  }) => Promise<void>) : this {
+
+    this._monitors = callback
+
+    return this
+
+  } 
+
+  /**
    * The 'useStudio' is method used to wrapper to check the credentials for studio.
    * @param    {object}   studio
    * @property {function} studio.onCredentials
@@ -218,17 +248,6 @@ class NfsServer {
    * @returns 
    */
   listen(port:number, callback ?: ({ port , server } : { port : number , server : Server }) => void) {
-
-    cron.schedule('0 0 0 * * *', async () => {
-
-      if(this._buckets == null) return
-
-      const buckets : string[] = await this._buckets()
-      
-      for(const bucket of buckets) {
-        this._queue.add(() => this._removeOldDirInTrash(bucket))
-      }
-    })
 
     this._app = new Spear({
       cluster : this._cluster
@@ -354,6 +373,63 @@ class NfsServer {
     })
 
     this._app.listen(port, ({ port , server }) => {
+
+      if(this._buckets != null) {
+
+        cron.schedule('0 0 0 * * *', async () => {
+        
+          const buckets : string[] = this._buckets == null ? [] : await this._buckets()
+          
+          for(const bucket of buckets) {
+            this._queue.add(() => this._removeOldDirInTrash(bucket))
+          }
+        })
+      }
+     
+      if(this._monitors != null) {
+
+        const logCpuAndMemoryUsage = () => {
+
+          const memoryUsage = process.memoryUsage();
+
+          const totalMemory = os.totalmem();
+
+          const cpus = os.cpus();
+
+          const usageData = cpus.map(cpu => {
+            const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+            const active = total - cpu.times.idle;
+            return (active / total) * 100;
+          });
+      
+          const overallMax = Math.max(...usageData)
+          const overallMin = Math.min(...usageData)
+          const overallAvg = usageData.reduce((acc, usage) => acc + usage, 0) / usageData.length;
+              
+          if(this._monitors != null) {
+            this._monitors({
+              host : process.env?.HOSTNAME == null ? null : String(process.env?.HOSTNAME),
+              memory:  {
+                total     : totalMemory / 1024 / 1024,
+                heapTotal : memoryUsage.heapTotal / 1024 / 1024,
+                heapUsed  : memoryUsage.heapUsed / 1024 / 1024
+              } ,
+              cpu : {
+                total : cpus.length,
+                max : overallMax,
+                min : overallMin,
+                avg : overallAvg,
+                speed : cpus.map((cpu) => {
+                  return cpu.speed / 1000
+                }).reduce((acc, usage) => acc + usage, 0) / cpus.length
+              }
+            })
+          }
+        }
+
+        setInterval(logCpuAndMemoryUsage, 5_000)
+      }
+
       return callback == null ? null : callback({ port , server })
     })
   }
