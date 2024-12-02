@@ -152,9 +152,7 @@
                         </label>
                         <span> File Name</span>
                       </div>
-                      
-                      <!-- <input type="checkbox" id="filesSelectdAll" name="filesSelectdAll"> -->
-                      <!-- File Name -->
+                    
                     </th>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
@@ -206,6 +204,19 @@
       <div class="flex justify-end space-x-4">
         <button id="removeYesBtnModal" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Ok</button>
         <button id="removeNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="removesModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+      <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Remove</h3>
+      <p class="mb-6 text-gray-600 dark:text-gray-300">
+        <span id="removesCountModal"> </span>
+      </p>
+      <div class="flex justify-end space-x-4">
+        <button id="removesYesBtnModal" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Ok</button>
+        <button id="removesNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">Cancel</button>
       </div>
     </div>
   </div>
@@ -275,6 +286,10 @@
       removeModal           : $('#removeModal'),
       removeYesBtnModal     : $('#removeYesBtnModal'),
       removeNoBtnModal      : $('#removeNoBtnModal'),
+      removesModal          : $('#removesModal'),
+      removesYesBtnModal    : $('#removesYesBtnModal'),
+      removesNoBtnModal     : $('#removesNoBtnModal'),
+      removesCountModal     : $('#removesCountModal'),
       editModal             : $('#editModal'),
       editYesBtnModal       : $('#editYesBtnModal'),
       editNoBtnModal        : $('#editNoBtnModal'),
@@ -377,15 +392,18 @@
     themeToggleMode()
   };
 
-  function addFileToTable(file) {
+  function addFileToTable(file , checkFile = 0) {
 
     const rows = Array.from(fileTableBody.children)
 
-    const find = rows.find(r => {
-      return String(r.cells[0].textContent).trim() === file.name
-    })
+    if(checkFile) {
+      const find = rows.find(r => {
+        return String(r.cells[0].textContent).trim() === file.name
+      })
 
-    if(find) return
+      if(find) return
+    
+    }
 
     showTable();
 
@@ -620,7 +638,7 @@
 
     $state.el.fileTableBody.innerHTML = ''
 
-    await sleep(300);
+    await sleep(300)
 
     showTable();
 
@@ -699,6 +717,8 @@
  
   async function fetchRemove(target) {
     const path = normalizePath(target)
+
+    showLoading();
 
     const response = await fetch(`${$state.data.url}/studio/api/files/${path}`, {
       method: 'DELETE'
@@ -1216,7 +1236,7 @@
         extension : String(file.name)?.split('.').pop(),
         lastModified : new Date().toJSON(),
         path : `${path}/${file.name}`
-      })
+      } ,1)
     }
 
     await Promise.allSettled(promises.map(v => v()))
@@ -1371,14 +1391,26 @@
   });
 
   $state.el.delete.addEventListener('click', async() => {
+    $state.el.removesModal.classList.remove('hidden');
+    const files = $state.data.files.filter(v => v.selected)
+    $state.el.removesCountModal.textContent = `Are you sure you want to remove (${files.length}) files ?`
+  });
+
+  $state.el.removesYesBtnModal.addEventListener('click', async() => {
     const files = $state.data.files.filter(v => v.selected)
 
     for (const file of files) {
       await fetchRemove(file.path)
     }
 
+    $state.el.removesModal.classList.add('hidden');
     await sleep(1500)
     await onReload()
+    
+  });
+
+  $state.el.removesNoBtnModal.addEventListener('click', () => {
+    $state.el.removesModal.classList.add('hidden');
   });
   
   $state.el.filesSelectdAll.addEventListener('change', (event) => {

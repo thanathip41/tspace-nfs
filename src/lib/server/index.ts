@@ -192,6 +192,9 @@ class NfsServer {
    * The 'onMonitors' is method used to monitors the server.
    * 
    * @param    {function} callback
+   * @property {string} callback.host
+   * @property {object} callback.memory
+   * @property {object} callback.cpu
    * @returns  {this}
    */
   onMonitors (callback : ({ host, memory , cpu } : { 
@@ -388,46 +391,53 @@ class NfsServer {
      
       if(this._monitors != null) {
 
-        const logCpuAndMemoryUsage = () => {
+        try {
 
-          const memoryUsage = process.memoryUsage();
+          const logCpuAndMemoryUsage = () => {
 
-          const totalMemory = os.totalmem();
+            const memoryUsage = process.memoryUsage();
+  
+            const totalMemory = os.totalmem();
+  
+            const cpus = os.cpus();
+  
+            const usageData = cpus.map(cpu => {
+              const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+              const active = total - cpu.times.idle;
+              return (active / total) * 100;
+            });
+        
+            const overallMax = Number(Number(Math.max(...usageData)).toFixed(4))
+            const overallMin = Number(Number(Math.min(...usageData)).toFixed(4))
+            const overallAvg = Number(Number(usageData.reduce((acc, usage) => acc + usage, 0) / usageData.length).toFixed(4))
+                
+            if(this._monitors != null) {
 
-          const cpus = os.cpus();
+              const toMB = (v : any) =>  Number(Number(v / 1024 / 1024).toFixed(4))
 
-          const usageData = cpus.map(cpu => {
-            const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
-            const active = total - cpu.times.idle;
-            return (active / total) * 100;
-          });
-      
-          const overallMax = Math.max(...usageData)
-          const overallMin = Math.min(...usageData)
-          const overallAvg = usageData.reduce((acc, usage) => acc + usage, 0) / usageData.length;
-              
-          if(this._monitors != null) {
-            this._monitors({
-              host : process.env?.HOSTNAME == null ? null : String(process.env?.HOSTNAME),
-              memory:  {
-                total     : totalMemory / 1024 / 1024,
-                heapTotal : memoryUsage.heapTotal / 1024 / 1024,
-                heapUsed  : memoryUsage.heapUsed / 1024 / 1024
-              } ,
-              cpu : {
-                total : cpus.length,
-                max : overallMax,
-                min : overallMin,
-                avg : overallAvg,
-                speed : cpus.map((cpu) => {
-                  return cpu.speed / 1000
-                }).reduce((acc, usage) => acc + usage, 0) / cpus.length
-              }
-            })
+              this._monitors({
+                host : process.env?.HOSTNAME == null ? null : String(process.env?.HOSTNAME),
+                memory:  {
+                  total     :toMB(totalMemory),
+                  heapTotal : toMB(memoryUsage.heapTotal),
+                  heapUsed  : toMB(memoryUsage.heapUsed),
+                } ,
+                cpu : {
+                  total : cpus.length,
+                  max   : overallMax,
+                  min   : overallMin,
+                  avg   : overallAvg,
+                  speed : cpus
+                  .map((cpu) => cpu.speed / 1000)
+                  .reduce((acc, usage) => acc + usage, 0) / cpus.length
+                }
+              })
+            }
           }
-        }
+  
+          setInterval(logCpuAndMemoryUsage, 5_000)
 
-        setInterval(logCpuAndMemoryUsage, 5_000)
+        } catch (e) {}
       }
 
       return callback == null ? null : callback({ port , server })
