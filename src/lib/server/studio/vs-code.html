@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NFS-Studio</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.14"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
 
   <style>
@@ -48,7 +48,7 @@
 </body>
 <script>
 
-  const $ = (element) => document.querySelector(element)
+  const $query = (element) => document.querySelector(element)
 
   const url = window.location.href
   const baseUrl = `${window.location.protocol}//${window.location.host}/`
@@ -81,7 +81,7 @@
   }
 
   async function notify({ type, message }) {
-    const  notifyContainer  = $('#notify-container')
+    const  notifyContainer  = $query('#notify-container')
 
     const notify = document.createElement('div');
 
@@ -117,7 +117,7 @@
   }
 
   function themeToggleMode() {
-    const theme = (localStorage.getItem('theme') ?? (document.body?.classList?.contains('dark') ? 'dark' : 'light'))
+    const theme = localStorage.getItem('theme') == null ? 'dark' : localStorage.getItem('theme')
     const isDark = theme === 'dark'
     const prefixToReplace = isDark ? 'light:' : 'dark:';
     const newPrefix = isDark ? 'dark:' : 'light:';
@@ -151,9 +151,9 @@
 
     require(['vs/editor/editor.main'], function() {
      
-      const theme = (localStorage.getItem('theme') ?? (document.body?.classList?.contains('dark') ? 'dark' : 'light'))
+      const theme = localStorage.getItem('theme') == null ? 'dark' : localStorage.getItem('theme')
       
-      const editor = monaco.editor.create($('#editor'), {
+      const editor = monaco.editor.create($query('#editor'), {
         language: "{{language}}",
         theme: `vs-${theme}`,
         automaticLayout: true,

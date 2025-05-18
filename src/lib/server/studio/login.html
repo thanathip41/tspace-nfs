@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com/3.4.14"></script>
     <title>NFS-Studio</title>
     <style>
     #loading {
@@ -19,7 +20,6 @@
         z-index: 9999;
     }
     </style>
-  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900">
 
@@ -51,18 +51,18 @@
     </div>
 </body>
 <script>
-    const $ = (element) => document.querySelector(element)
-    const loading = $('#loading')
-    const loginForm = $('#loginForm');
-    const errorMessage = $('#errorMessage');
+    const $query = (element) => document.querySelector(element)
+    const loading = $query('#loading')
+    const loginForm = $query('#loginForm');
+    const errorMessage = $query('#errorMessage');
     const url = `${window.location.protocol}//${window.location.host}`
 
     loginForm.addEventListener('submit', async (event) => {
 
         event.preventDefault();
         
-        const username = $('#username').value;
-        const password = $('#password').value;
+        const username = $query('#username').value;
+        const password = $query('#password').value;
 
         try {
 
