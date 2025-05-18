@@ -138,6 +138,8 @@ class NfsClient {
 
         try {
 
+            path = `${path}`.replace(/^\/+/, '')
+
             if(exists != null && exists) {
 
                 const url = this._URL(this._ENDPOINT_FILE)
@@ -154,8 +156,6 @@ class NfsClient {
                 return `${this._url}/${response.data?.endpoint}`
             }
 
-            const fileName = `${path}`.replace(/^\/+/, '')
-
             const { token , bucket } = this._credentials
 
             const accessKey  = String(token)
@@ -165,7 +165,7 @@ class NfsClient {
             const signature  = Buffer.from(bcrypt.hashSync(combined , 1)).toString('base64')
 
             const endpoint = [
-                `${bucket}/${fileName}?AccessKey=${accessKey}`,
+                `${bucket}/${path}?AccessKey=${accessKey}`,
                 `Expires=${expires}`,
                 `Download=${downloaded}`,
                 `Signature=${signature}`
@@ -764,7 +764,7 @@ class NfsClient {
             method : 'POST'
         })
         
-        this._authorization = response.data?.accessToken
+        this._authorization = response.data?.accessToken ?? ''
 
         return
     }

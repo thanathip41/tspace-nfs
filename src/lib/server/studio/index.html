@@ -84,7 +84,6 @@
           <h3 class="text-sm mb-2 dark:text-gray-200">storaged : <span id="storaged"></span></h3>
         </div>
        
-        
         <ul id="bucket-container" class="space-y-2 dark:text-gray-200"></ul>
       </div>
     
@@ -94,6 +93,11 @@
             No Buckets available
           </div>
           <div id="tableContainer" class="hidden">
+            <!-- <div class="flex flex-wrap items-center justify-end pt-2 px-4 gap-4">
+              <svg id="bucketCreate" class="w-8 h-8 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-7 7V5"/>
+              </svg>
+            </div> -->
             <div class="flex flex-wrap items-center justify-between p-4 gap-4">
           
               <div class="flex items-center space-x-3 flex-wrap sm:flex-nowrap">
@@ -105,8 +109,9 @@
                   <span id="currentPath"></span>
                 </span>
               </div>
-            
+              
               <div class="flex flex-wrap items-center gap-2 sm:gap-3 justify-end">
+               
                 <span class="font-semibold text-gray-800 dark:text-gray-200 w-full sm:w-auto text-center" id="currentFiles"></span>
                 <button 
                   id="download" 
@@ -123,12 +128,11 @@
               </div>
             </div>
             
-            
             <div class="overflow-x-auto">
-              <table class="table-auto w-full bg-white dark:bg-gray-800">
+              <table id="dataTable" class="table-auto w-full bg-white dark:bg-gray-800">
                 <thead>
                   <tr>
-                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">
+                    <th class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">
                     
                       <div class="flex items-center space-x-2">
                         <label class="cursor-pointer">
@@ -150,13 +154,13 @@
                           />
                           </svg>
                         </label>
-                        <span> File Name</span>
+                        <span onclick="sortTable()"> File Name</span>
                       </div>
                     
                     </th>
-                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
-                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
-                    <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+                    <th onclick="sortTable()"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
+                    <th onclick="sortTable()"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
+                    <th onclick="sortTable()"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Actions</th>
                   </tr>
                 </thead>
@@ -167,10 +171,9 @@
           </div>
         </div>
       </div>
-  
     </div>
   
-    <div class="grid grid-cols-1 w-full h-[25vh] overflow-y-auto border-t">
+    <div class="grid grid-cols-1 w-full h-[50vh] overflow-y-auto border-t">
       <div class="mt-2">
         <table class="table-auto">
           <thead>
@@ -264,8 +267,8 @@
 
 <script>
 
-  const $ = (element) => document.querySelector(element);
-  const $$ = (element) => document.querySelectorAll(element);
+  const $query = (element) => document.querySelector(element);
+  const $$query = (element) => document.querySelectorAll(element);
 
   const $state = {
     data : {
@@ -280,46 +283,46 @@
       files : []
     },
     el : {
-      currentFiles          : $('#currentFiles'),
-      filesSelectdAll       : $('#filesSelectdAll'),
-      filesSelectd          : $$('.filesSelectd'),
-      removeModal           : $('#removeModal'),
-      removeYesBtnModal     : $('#removeYesBtnModal'),
-      removeNoBtnModal      : $('#removeNoBtnModal'),
-      removesModal          : $('#removesModal'),
-      removesYesBtnModal    : $('#removesYesBtnModal'),
-      removesNoBtnModal     : $('#removesNoBtnModal'),
-      removesCountModal     : $('#removesCountModal'),
-      editModal             : $('#editModal'),
-      editYesBtnModal       : $('#editYesBtnModal'),
-      editNoBtnModal        : $('#editNoBtnModal'),
-      bucketModal           : $('#bucketModal'),
-      bucketYesBtnModal     : $('#bucketYesBtnModal'),
-      bucketNoBtnModal      : $('#bucketNoBtnModal'),
-      bucketCreate          : $('#bucketCreate'),
-      rename                : $('#rename'),
-      fileProgressTableBody : $('#fileProgressTableBody'),
-      fileTableBody         : $('#fileTableBody'),
-      dropZone              : $('#dropZone'),
-      bucketContainer       : $('#bucket-container'),
-      tableContainer        : $('#tableContainer'),
-      noBucketMessage       : $('#noBucketMessage'),
-      loading               : $('#loading'),
-      currentPath           : $('#currentPath'),
-      themeToggle           : $('#themeToggle'),
-      toggleIcon            : $('#toggleIcon'),
-      logout                : $('#logout'),
-      bucket                : $('#bucket'),
-      token                 : $('#token'),
-      secret                : $('#secret'),
-      buckets               : $('#buckets'),
-      storaged              : $('#storaged'),
-      notifyContainer       : $('#notify-container'),
-      errorMessage          : $('#errorMessage'),
-      download              : $('#download'),
-      delete                : $('#delete'),
-      bucketToggle          : $$('.bucket-toggle'),
-      folderToggle          : $$('.folder-toggle')
+      currentFiles          : $query('#currentFiles'),
+      filesSelectdAll       : $query('#filesSelectdAll'),
+      filesSelectd          : $$query('.filesSelectd'),
+      removeModal           : $query('#removeModal'),
+      removeYesBtnModal     : $query('#removeYesBtnModal'),
+      removeNoBtnModal      : $query('#removeNoBtnModal'),
+      removesModal          : $query('#removesModal'),
+      removesYesBtnModal    : $query('#removesYesBtnModal'),
+      removesNoBtnModal     : $query('#removesNoBtnModal'),
+      removesCountModal     : $query('#removesCountModal'),
+      editModal             : $query('#editModal'),
+      editYesBtnModal       : $query('#editYesBtnModal'),
+      editNoBtnModal        : $query('#editNoBtnModal'),
+      bucketModal           : $query('#bucketModal'),
+      bucketYesBtnModal     : $query('#bucketYesBtnModal'),
+      bucketNoBtnModal      : $query('#bucketNoBtnModal'),
+      bucketCreate          : $query('#bucketCreate'),
+      rename                : $query('#rename'),
+      fileProgressTableBody : $query('#fileProgressTableBody'),
+      fileTableBody         : $query('#fileTableBody'),
+      dropZone              : $query('#dropZone'),
+      bucketContainer       : $query('#bucket-container'),
+      tableContainer        : $query('#tableContainer'),
+      noBucketMessage       : $query('#noBucketMessage'),
+      loading               : $query('#loading'),
+      currentPath           : $query('#currentPath'),
+      themeToggle           : $query('#themeToggle'),
+      toggleIcon            : $query('#toggleIcon'),
+      logout                : $query('#logout'),
+      bucket                : $query('#bucket'),
+      token                 : $query('#token'),
+      secret                : $query('#secret'),
+      buckets               : $query('#buckets'),
+      storaged              : $query('#storaged'),
+      notifyContainer       : $query('#notify-container'),
+      errorMessage          : $query('#errorMessage'),
+      download              : $query('#download'),
+      delete                : $query('#delete'),
+      bucketToggle          : $$query('.bucket-toggle'),
+      folderToggle          : $$query('.folder-toggle')
     }
   }
 
@@ -369,7 +372,6 @@
       <td class="px-4 py-2">
         <input type="checkbox" disabled="disabled">
         <label for="vehicle1"> ${folderName} </label><br> 
-        <button class="text-blue-500" type="button" target="${$state.data.path.selected}/${folderName}" onclick="onLoadFile(event)"> ${folderName} </button>
       </td>
       <td class="px-4 py-2">-</td>
       <td class="px-4 py-2">-</td>
@@ -443,7 +445,7 @@
       </td>
       <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
       <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension === '' || file.extension == null ? 'file' : file.extension}</td>
-      <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
+      <td class="px-4 py-2">${new Date(file.lastModified).toJSON()}</td>
       <td class="flex gap-3 px-4 py-2">
          
           <svg target="${file.path}" onclick="${file.isFolder ? 'onLoadFile(event)' : 'onPreview(event)'}"} 
@@ -465,6 +467,34 @@
     `;
     $state.el.fileTableBody.appendChild(row);
   };
+
+  async function sortTable() {
+    showLoading();
+    const table = document.getElementById('dataTable');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const isAscending = table.getAttribute('data-sort-order') === 'asc';
+
+    table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
+
+    rows.sort((a, b) => {
+      const aText = a.cells[0].innerText.trim();
+      const bText = b.cells[0].innerText.trim();
+
+      if (!isNaN(aText) && !isNaN(bText)) {
+        return isAscending ? aText - bText : bText - aText;
+      }
+      return isAscending
+        ? aText.localeCompare(bText)
+        : bText.localeCompare(aText);
+    });
+
+    const tbody = table.querySelector('tbody');
+    tbody.innerHTML = '';
+    rows.forEach(row => tbody.appendChild(row));
+
+    await sleep(200);
+    hideLoading();
+  }
 
   function updateFileProgress({ file, progress, uploadSpeed }) {
     const rows = Array.from(fileProgressTableBody.children);
@@ -488,7 +518,7 @@
       </td>
       <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
       <td class="px-4 py-2">${file.extension}</td>
-      <td class="px-4 py-2">${new Date(file.lastModified).toLocaleString()}</td>
+      <td class="px-4 py-2">${new Date(file.lastModified).toJSON()}</td>
       <td class="px-4 py-2"> <progress value="${progress}" max="100"></progress> ${progress}% </td>
       <td class="px-4 py-2"> ${formatSize(uploadSpeed)}/s </td>
     `;
@@ -627,7 +657,12 @@
     const response = await fetch(`${$state.data.url}/studio/api/files/${path}`);
 
     if (!response.ok) {
-        throw new Error('Network response was not ok');
+      await sleep(300);
+
+      showTable();
+      hideLoading();
+      localStorage.removeItem('lastPathDirectory')
+      throw new Error('Network response was not ok');
     }
 
     const res = await response.json();
@@ -652,7 +687,6 @@
 
     hideLoading()
     
-
     let link = []
     let currentTarget = []
     for(const t of target.split('/')) {
@@ -892,7 +926,7 @@
 
   function addToggleFunctionality() {
 
-    $$('.bucket-toggle').forEach(button => {
+    $$query('.bucket-toggle').forEach(button => {
 
       button.addEventListener('click', async function(e) {
 
@@ -911,7 +945,7 @@
       })
     })
 
-    $$('.folder-toggle').forEach(button => {
+    $$query('.folder-toggle').forEach(button => {
       button.addEventListener('click', async function(e) {
 
         const target = e.target.getAttribute('target');
@@ -943,7 +977,7 @@
       })
     })
 
-    $$('.credentials').forEach(button => {
+    $$query('.credentials').forEach(button => {
       button.addEventListener('click', async function(e) {
 
         const bucket = e.currentTarget.querySelector('p')
@@ -1190,6 +1224,17 @@
     
     const items = e.dataTransfer.items;
 
+    if (e.dataTransfer.items) {
+        for (let item of e.dataTransfer.items) {
+            let entry = item.webkitGetAsEntry();
+            if (entry && entry.isDirectory) {
+                console.log('Dropped folder name:', entry.name);
+
+                addFolderToTable(entry.name)
+            }
+        }
+    }
+
     const files = await handleDropItems(items)
 
     if(!files.length) {
@@ -1421,7 +1466,7 @@
       checkbox.checked = checked;
     })
 
-    $('#path-checked').classList.toggle('hidden')
+    $query('#path-checked').classList.toggle('hidden')
     currentTotalFiles({ selected : checked, forceAll : checked , unForceAll : !checked })
   })
 

@@ -34,7 +34,7 @@ class NfsServer {
   private _onStudioBucketCreated    ?: ({ bucket , secret , token } : { token : string; secret : string; bucket : string}) => Promise<void> | null
   private _onStudioCredentials      ?: ({ username, password } : { username : string; password : string }) => Promise<{ logged : boolean , buckets : string[] }> | null
   private _onLoadBucketCredentials  ?: () => Promise<{ token : string; secret : string; bucket : string}[]>
-  private _monitors                 ?: ({ host, memory , cpu } : { host : string | null; memory : {  total : number;heapTotal : number;heapUsed: number },cpu : { total : number;max: number;min: number;avg: number;speed: number }}) => Promise<void>
+  private _monitors                 ?: ({ host, memory , cpu } : { host : string | null; memory : {  total : number;heapTotal : number;heapUsed: number ;external : number ; rss : number  },cpu : { total : number;max: number;min: number;avg: number;speed: number }}) => Promise<void>
 
   private _queue          = new Queue(3)
   private _app            !: Spear
@@ -48,6 +48,7 @@ class NfsServer {
   private _progress       : boolean = false
   private _debug          : boolean = false
   private _trash          : string = '@trash'
+  private _metadata       : string = '@meta.json'
   private _backup         : number = 30
 
 
@@ -203,6 +204,8 @@ class NfsServer {
       total     : number // total
       heapTotal : number // MB
       heapUsed  : number // MB
+      rss       : number // MB
+      external  : number // MB
     }  
     cpu :  {
       total : number // total
@@ -240,6 +243,9 @@ class NfsServer {
     this._onStudioBucketCreated = onBucketCreated
     this._onLoadBucketCredentials = onLoadBucketCredentials
 
+    // creating file meta for any buckets
+    this._syncMetadata('*')
+
     return this;
   }
 
@@ -254,6 +260,11 @@ class NfsServer {
 
     this._app = new Spear({
       cluster : this._cluster
+    })
+
+    this._app.cors({
+      origins: ['*'],
+      credentials: true
     })
 
     this._app.useLogger({
@@ -421,6 +432,8 @@ class NfsServer {
                   total     :toMB(totalMemory),
                   heapTotal : toMB(memoryUsage.heapTotal),
                   heapUsed  : toMB(memoryUsage.heapUsed),
+                  external  : toMB(memoryUsage.external),
+                  rss       : toMB(memoryUsage.rss)
                 } ,
                 cpu : {
                   total : cpus.length,
@@ -840,6 +853,8 @@ class NfsServer {
 
       await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
 
+      await this._getMetadata(bucket)
+
       return res.ok({
         path : this._normalizePath({ directory : folder , path : file.name }),
         name : file.name,
@@ -947,6 +962,8 @@ class NfsServer {
       
       await writeFile(to)
 
+      await this._getMetadata(bucket)
+
       return res.ok({
         path : this._normalizePath({ directory : folder , path : name }),
         name : name,
@@ -996,13 +1013,15 @@ class NfsServer {
         })
       }
 
-      const writeFile = (base64 : string , to : string) => {
-        return fsSystem.writeFileSync(to, String(base64), 'base64')
+      const writeFile = async (base64 : string , to : string) => {
+        return fsSystem.promises.writeFile(to, String(base64), 'base64')
       }
 
       const to = pathSystem.join(pathSystem.resolve(),`${directory}/${name}`)
 
-      writeFile(String(base64), to)
+      await writeFile(String(base64), to)
+
+      await this._getMetadata(bucket)
 
       return res.ok({
         path : folder ? `${folder}/${name}` : name,
@@ -1041,6 +1060,8 @@ class NfsServer {
       }
 
       this._queue.add(async () => await this._trashed({ path, bucket }))
+
+      await this._getMetadata(bucket)
       
       return res.ok()
   
@@ -1117,7 +1138,7 @@ class NfsServer {
       })
     }
 
-    const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
+    const decodedPayload = this._safelyParseJSON(Buffer.from(payload, 'base64').toString('utf-8'));
   
     if (decodedPayload.exp) {
       const currentTime = Math.floor(Date.now() / 1000)
@@ -1150,16 +1171,104 @@ class NfsServer {
 
   }
 
+  private _syncMetadata = async (syncBuckets: string = '*') => {
+
+    const rootFolder = this._rootFolder
+
+    const buckets = (this._buckets == null 
+      ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
+        return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
+      }) 
+      : await this._buckets()
+    )
+
+    for(const bucket of buckets) {
+      
+      if(syncBuckets === '*' || syncBuckets === bucket) {
+
+        const targetDir = `${rootFolder}/${bucket}`
+
+      const analyzeDirectory = (dirPath: string): any => {
+        let fileCount = 0;
+        let folderCount = 0;
+        let totalSize = 0;
+      
+        const traverseDirectory = (currentPath: string) => {
+
+          const items = fsSystem.readdirSync(currentPath)
+
+          for(const item of items) {
+
+            const itemPath = pathSystem.join(currentPath, item);
+            const stats = fsSystem.statSync(itemPath);
+
+            if (stats.isDirectory() && item === this._trash) {
+              continue;
+            }
+      
+            if (stats.isDirectory()) {
+              folderCount++;
+              traverseDirectory(itemPath)
+            } 
+            
+            if (stats.isFile() && item !== this._metadata) {
+              fileCount++;
+              totalSize += stats.size
+            }
+
+          }
+      
+        }
+      
+        traverseDirectory(dirPath);
+      
+        return { fileCount, folderCount, totalSize };
+      }
+
+      const result = analyzeDirectory(targetDir);
+     
+      // write file metadata to bucket
+      fsSystem.writeFileSync(`${targetDir}/${this._metadata}`, 
+        JSON.stringify({ 
+          bucket , 
+          info : {
+            files : result.fileCount,
+            folders : result.folderCount,
+            size : result.totalSize,
+            sizes : {
+              bytes : result.totalSize,
+              kb : (result.totalSize / 1024),
+              mb : (result.totalSize / (1024 * 1024)),
+              gb : (result.totalSize / (1024 * 1024 * 1024)),
+            }
+          } 
+        },null,2),
+        'utf-8'
+      )
+
+      }
+
+      
+    }
+  }
+
   private _studio = async ({  res , cookies } : TContext) => {
 
     const auth = cookies['auth.session']
 
     if(!auth || auth == null) {
-      const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','login.html'), 'utf8');
-   
-      return res.html(html);
+      const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','login.html'), 'utf8')
+
+      const minifiedHtml = await minify(html, {
+        collapseWhitespace: true,
+        removeComments: true,
+        minifyCSS: true,
+        minifyJS: true
+      })
+      return res.html(minifiedHtml);
     }
-    const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','index.html'), 'utf8');
+
+    const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','index.html'), 'utf8')
 
     const minifiedHtml = await minify(html, {
       collapseWhitespace: true,
@@ -1184,58 +1293,26 @@ class NfsServer {
       : await this._buckets()
     ).filter((bucket : string) => allowBuckets.includes(bucket) || allowBuckets[0] === '*')
 
-    const lists : any[] = []
+
+    let totalSize: number = 0;
 
     for(const bucket of buckets) {
-      const targetDir = `${rootFolder}/${bucket}`
-      const structures = this._fileStructure(targetDir);
-  
-      lists.push({
-        [bucket] : structures
-      })
+
+      const metadata = await this._getMetadata(bucket);
+
+      if(metadata == null) continue;
+
+      totalSize += Number(metadata.info?.size ?? 0);
+
     }
-    
-    const storageSync = (dirPath: string , buckets : string[]): number => {
-      let totalSize = 0
-
-      const readDirSync = (dir: string) => {
-        const fullDirectory = pathSystem.join(pathSystem.resolve(),dir);
-        
-        const files = fsSystem.readdirSync(fullDirectory, { withFileTypes: true });
-
-        for(const file of files) {
-          const fullPath = pathSystem.join(pathSystem.resolve(),dir, file.name);
-          const filePath = pathSystem.join(dir, file.name);
-          const stats = fsSystem.statSync(fullPath);
-
-          if (stats.isDirectory()) {
-            if(!buckets.includes(filePath.replace(/\\/g,'/').split('/')[1])) continue
-
-            readDirSync(filePath)
-
-            continue
-          }
-            
-          totalSize += stats.size;
-          
-        }
-        
-      };
-
-      readDirSync(dirPath)
-      
-      return totalSize
-    }
-
-    const bytes = storageSync(this._rootFolder , buckets);
 
     return res.ok({
       buckets : buckets.length,
       storage : {
-        bytes,
-        kb : Number((bytes / 1024).toFixed(2)),
-        mb : Number((bytes / (1024 * 1024)).toFixed(2)),
-        gb : Number((bytes / (1024 * 1024 * 1024)).toFixed(2))
+        bytes : totalSize,
+        kb : Number((totalSize / 1024).toFixed(2)),
+        mb : Number((totalSize / (1024 * 1024)).toFixed(2)),
+        gb : Number((totalSize / (1024 * 1024 * 1024)).toFixed(2))
       }
     })
 
@@ -1267,9 +1344,10 @@ class NfsServer {
 
     const extension = pathSystem.extname(filePath).replace(/\./g,'')
     const textFileExtensions = [
-      'txt', 'md', 'csv', 'json', 'xml', 'html', 'css', 'js', 'ts', 
-      'java','go','rs', 'py', 'log', 'yaml', 'ini', 'bat', 'sh', 'sql', 
-      'conf', 'rtf', 'tex', 'srt', 'plist', 'env','yml','yaml','key'
+      'txt', 'md', 'csv', 'json', 'xml', 'html', 'css', 
+      'js', 'ts','php','h','c', 'java','go','rs', 'py', 'sh', 'sql',
+      'log', 'ini', 'bat', 'yml','yaml','key',
+      'conf', 'rtf', 'tex', 'srt', 'plist', 'env',
     ];
 
     if(textFileExtensions.includes(extension)) {
@@ -1487,6 +1565,8 @@ class NfsServer {
 
       await writeFile(file.tempFilePath , this._normalizePath({ directory , path : name , full : true }))
 
+      await this._syncMetadata(bucket)
+
       return res.ok({
         path : this._normalizePath({ directory : folder , path :name }),
         name : name,
@@ -1562,36 +1642,6 @@ class NfsServer {
 
     const lists : any[] = []
 
-    const storageSync = (dirPath: string , bucket : string[]): number => {
-      let totalSize = 0
-
-      const readDirSync = (dir: string) => {
-        const fullDirectory = pathSystem.join(pathSystem.resolve(),dir);
-        
-        const files = fsSystem.readdirSync(fullDirectory, { withFileTypes: true });
-
-        for(const file of files) {
-          const fullPath = pathSystem.join(pathSystem.resolve(),dir, file.name);
-          const filePath = pathSystem.join(dir, file.name);
-          const stats = fsSystem.statSync(fullPath);
-
-          if (stats.isDirectory()) {
-            readDirSync(filePath)
-
-            continue
-          }
-            
-          totalSize += stats.size;
-          
-        }
-        
-      };
-
-      readDirSync([dirPath,bucket].join('/'))
-      
-      return totalSize
-    }
-
     for(const bucket of buckets) {
 
       if(allowBuckets.includes(bucket) || allowBuckets[0] === '*') {
@@ -1613,10 +1663,12 @@ class NfsServer {
           }
         }
 
-        const loadCredentials = this._onLoadBucketCredentials == null ? [] : await this._onLoadBucketCredentials()
-        const credentials = loadCredentials.find(v => v.bucket === bucket)
-        const bytes = storageSync(this._rootFolder,bucket)
-  
+        const loadCredentials = this._onLoadBucketCredentials == null ? [] : await this._onLoadBucketCredentials();
+
+        const credentials = loadCredentials.find(v => v.bucket === bucket);
+
+        const bytes = Number((await this._getMetadata(bucket))?.info?.size ?? 0);
+
         lists.push({
           [bucket] : {
             credentials,
@@ -1626,7 +1678,6 @@ class NfsServer {
               mb : Number((bytes / (1024 * 1024)).toFixed(2)),
               gb : Number((bytes / (1024 * 1024 * 1024)).toFixed(2))
             }
-
           }
         })
       }
@@ -1635,7 +1686,6 @@ class NfsServer {
     return res.ok({
       buckets : lists
     })
-      
   }
 
   private _studioBucketCreate = async ({ req , res , body } : TContext) => {
@@ -1698,10 +1748,19 @@ class NfsServer {
     
     return res.ok({
       files : files.sort((a, b) => {
-        if (a.isFolder !== b.isFolder) {
-          return b.isFolder - a.isFolder
+
+        if (a.name.includes('@') && !b.name.includes('@')) {
+          return -1;
         }
-        return +new Date(a.lastModified) - +new Date(b.lastModified)
+        if (!a.name.includes('@') && b.name.includes('@')) {
+          return 1;
+        }
+      
+        if (a.isFolder !== b.isFolder) {
+          return b.isFolder - a.isFolder;
+        }
+  
+        return +new Date(a.lastModified) - +new Date(b.lastModified);
       })
     })
       
@@ -1781,12 +1840,13 @@ class NfsServer {
       }
 
       this._queue.add(async () => await this._trashedWithFolder({ path , bucket  }))
-     
+
       return res.ok()
     }
 
     if(path.includes(this._trash)) {
       this._remove(fullPath , { delayMs : 0 })
+      await this._syncMetadata(bucket)
       return res.ok()
     }
 
@@ -1796,12 +1856,27 @@ class NfsServer {
       
   }
 
+  private _getMetadata = async ( bucket : string) => {
+
+    const directory : string = pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${this._metadata}`);
+            
+    const checkMetadata : boolean = fsSystem.existsSync(directory);
+
+    if(!checkMetadata) return null
+
+    const metadata : string = await fsSystem.promises.readFile(directory,'utf-8');
+
+    return this._safelyParseJSON(metadata)
+  }
+
   private _fileStructure = async (dirPath: string , { includeFiles = false } : { includeFiles ?: boolean} = {}): Promise<any[]> => {
     const items: any[] = [];
 
     const files = fsSystem.readdirSync(dirPath)
 
     for (const file of files) {
+
+      if(file === this._metadata) continue
 
       const path = pathSystem.join(dirPath, file)
       const fullPath = pathSystem.join(pathSystem.resolve(),dirPath, file)
@@ -1810,21 +1885,24 @@ class NfsServer {
       const lastModified = stats.mtime
 
       if (stats.isDirectory()) {
+
+        const files = (await this._files(fullPath , { ignore : this._trash }))
+        .map(v => {
+          const stat = fsSystem.statSync(v)
+          const size = stat.size
+          return {
+            name : pathSystem.basename(v),
+            size
+          }
+        })
+
         items.push({
             name: file,
             path: path.replace(/\\/g, '/').replace(`${this._rootFolder}/`,''),
             isFolder: true,
             lastModified,
             folders: await this._fileStructure(path , { includeFiles }),
-            size : (await this._files(fullPath , { ignore : this._trash }))
-            .map(v => {
-              const stat = fsSystem.statSync(v)
-              const size = stat.size
-              return size
-            })
-            .reduce((prev , curr) => {
-              return prev + curr
-            },0)
+            size : files.reduce((prev , curr) => prev + curr.size,0)
         })
 
         continue
@@ -1937,7 +2015,11 @@ class NfsServer {
   
       const extension = filePath.split('.').pop()
   
-      const previews = ['mp3','mp4','pdf','png','jpeg','jpg','gif']
+      const previews = [
+        'ogv','ogg','webm','wav','mp3','mp4',
+        'pdf',
+        'png','jpeg','jpg','gif','webp','svg','ico'
+      ]
   
       return (res : any) => {
 
@@ -2200,12 +2282,16 @@ class NfsServer {
       })
     }
 
-    return await fsSystem.promises
+    await fsSystem.promises
     .rename(currentPath  , newPath)
     .catch(err => {
       console.log(err)
       return
     })
+
+    await this._syncMetadata(bucket)
+
+    return 
   }
 
   private async _trashedWithFolder ({ path , bucket } : { 
@@ -2227,7 +2313,7 @@ class NfsServer {
       })
     }
 
-    return await fsExtra
+    await fsExtra
     .copy(currentPath , newPath)
     .then(_ => {
       fsSystem.rmSync(currentPath, { recursive: true, force: true })
@@ -2236,6 +2322,10 @@ class NfsServer {
       console.log(err)
       return
     })
+
+    await this._syncMetadata(bucket)
+
+    return 
   }
 
   private async _fileExists(path : string) : Promise<boolean> {
@@ -2284,6 +2374,14 @@ class NfsServer {
     })
   }
 
+  private _safelyParseJSON (v : string) {
+    try {
+      return JSON.parse(v)
+    }
+    catch (err) {
+      return {}
+    }
+  } 
 }
 
 export { NfsServer}
