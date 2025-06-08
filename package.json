@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/thanathip41",
   "scripts": {
-    "build": "tsc && copyfiles -u 3 src/lib/server/studio/**/*.html build/lib/server",
+    "build": "tsc && copyfiles -u 3 src/lib/server/studio-html/**/*.html build/lib/server",
     "prepare": "npm run build",
     "beta": "npm run build && npm publish --tag beta",
     "release": "npm run build && npm publish",

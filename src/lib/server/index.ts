@@ -1,14 +1,11 @@
 import pathSystem   from 'path'
 import fsSystem     from 'fs'
-import fsExtra      from  'fs-extra'
 import jwt          from 'jsonwebtoken'
 import xml          from 'xml'
 import bcrypt       from 'bcrypt'
 import cron         from 'node-cron'
-import archiver     from 'archiver'
 import { Server }   from 'http'
 import { Time }     from 'tspace-utils'
-import { minify }   from 'html-minifier-terser'
 import os           from 'os'
 import { 
   type TContext, 
@@ -16,8 +13,9 @@ import {
   Spear,
   Router
 } from 'tspace-spear'
-import Queue from './queue'
 import html  from './default-html'
+import { NfsStudio } from './server.studio'
+
 /**
  * The 'NfsServer' class is a created the server for nfs
  * 
@@ -27,227 +25,7 @@ import html  from './default-html'
  * new NfsServer()
  * .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
  */
-class NfsServer {
-
-  private _buckets                  !: Function | null
-  private _credentials              !: ({ token , secret , bucket } : { token : string; secret : string; bucket : string}) => Promise<boolean> | null
-  private _onStudioBucketCreated    ?: ({ bucket , secret , token } : { token : string; secret : string; bucket : string}) => Promise<void> | null
-  private _onStudioCredentials      ?: ({ username, password } : { username : string; password : string }) => Promise<{ logged : boolean , buckets : string[] }> | null
-  private _onLoadBucketCredentials  ?: () => Promise<{ token : string; secret : string; bucket : string}[]>
-  private _monitors                 ?: ({ host, memory , cpu } : { host : string | null; memory : {  total : number;heapTotal : number;heapUsed: number ;external : number ; rss : number  },cpu : { total : number;max: number;min: number;avg: number;speed: number }}) => Promise<void>
-
-  private _queue          = new Queue(3)
-  private _app            !: Spear
-  private _router         !: Router 
-  private _html           !: string | null
-  private _fileExpired    : number = 60 * 60
-  private _rootFolder     : string = 'nfs'
-  private _jwtExipred     : number = 60 * 60
-  private _jwtSecret      : string = `<secret@${+new Date()}:${Math.floor(Math.random() * 9999)}>`
-  private _cluster        : boolean | number = false
-  private _progress       : boolean = false
-  private _debug          : boolean = false
-  private _trash          : string = '@trash'
-  private _metadata       : string = '@meta.json'
-  private _backup         : number = 30
-
-
-  get instance () {
-    return this._app
-  }
-
-  /**
-   * The 'progress' is method used to view the progress of the file upload.
-   * 
-   * @returns {this}
-   */
-  debug(): this {
-
-    this._debug = true
-
-    return this
-  }
-
-  /**
-   * The 'progress' is method used to view the progress of the file upload.
-   * 
-   * @returns {this}
-   */
-  progress (): this {
-
-    this._progress = true
-
-    return this
-  }
-
-  /**
-   * The 'defaultPage' is method used to set default home page.
-   * 
-   * @param {string} html 
-   * @returns {this}
-   */
-  defaultPage (html : string): this {
-    this._html = html
-    return this
-  }
-
-  /**
-   * The 'directory' is method used to set directory for root directory
-   * 
-   * @param {string} folder 
-   * @returns {this}
-   */
-  directory(folder : string): this {
-
-    this._rootFolder = folder
-
-    return this
-  }
-
-  /**
-   * The 'cluster' is method used to make cluster for server
-   * 
-   * @param {number} workers
-   * @returns {this}
-   */
-  cluster (workers ?: number): this {
-
-    this._cluster = workers == null ? true : workers
-
-    return this
-  }
-
-  /**
-   * The 'fileExpired' is method used to set file expiration
-   * 
-   * @param {number} seconds 
-   * @returns {this}
-   */
-  fileExpired (seconds  : number): this {
-    this._fileExpired = seconds 
-    return this
-  }
-
-  /**
-   * The 'credentials' is method used to set expiration and secret for credentials
-   * 
-   * @param    {object}  credentials
-   * @property {number}  credentials.expired by seconds
-   * @property {string?} credentials.secret 
-   * @returns  {this}
-   */
-  credentials ({ expired , secret } : { expired : number , secret ?: string}): this {
-
-    this._jwtExipred = expired
-
-    if(secret) {
-      this._jwtSecret = secret
-    }
-
-    return this
-  }
-
-  /**
-   * The 'bucketLists' method is used to inform the server about the available bucket lists.
-   * 
-   * @param    {function} callback
-   * @returns  {this}
-   */
-  bucketLists (callback : () => Promise<string[]>) : this {
-
-    this._buckets = callback
-
-    return this
-
-  } 
-
-  /**
-   * The 'onBucketLists' method is used to inform the server about the available bucket lists.
-   * 
-   * @param    {function} callback
-   * @returns  {this}
-   */
-  onLoadBucketLists (callback : () => Promise<string[]>) : this {
-
-    this._buckets = callback
-
-    return this
-
-  } 
-
-  /**
-   * The 'onCredentials' is method used to wrapper to check the credentials.
-   * 
-   * @param    {function} callback
-   * @returns  {this}
-   */
-  onCredentials (callback : ({ token , secret , bucket } : { token : string; secret : string; bucket : string}) => Promise<boolean>) : this {
-
-    this._credentials = callback
-
-    return this
-
-  } 
-
-  /**
-   * The 'onMonitors' is method used to monitors the server.
-   * 
-   * @param    {function} callback
-   * @property {string} callback.host
-   * @property {object} callback.memory
-   * @property {object} callback.cpu
-   * @returns  {this}
-   */
-  onMonitors (callback : ({ host, memory , cpu } : { 
-    host : string | null 
-    memory : { 
-      total     : number // total
-      heapTotal : number // MB
-      heapUsed  : number // MB
-      rss       : number // MB
-      external  : number // MB
-    }  
-    cpu :  {
-      total : number // total
-      max   : number // %
-      min   : number // %
-      avg   : number // %
-      speed : number // GHz
-    }
-  }) => Promise<void>) : this {
-
-    this._monitors = callback
-
-    return this
-
-  } 
-
-  /**
-   * The 'useStudio' is method used to wrapper to check the credentials for studio.
-   * @param    {object}   studio
-   * @property {function} studio.onCredentials
-   * @property {function} studio.onBucketCreated
-   * @returns  {this}
-   */
-  useStudio({
-    onCredentials,
-    onBucketCreated,
-    onLoadBucketCredentials
-  } : {
-    onCredentials   : (({ username, password }: { username: string; password: string }) => Promise<{ logged: boolean; buckets: string[] }>)
-    onBucketCreated ?: (({ token, secret, bucket }: { token: string; secret: string; bucket: string }) => Promise<void>),
-    onLoadBucketCredentials ?: (() => Promise<{ bucket : string , token : string , secret : string}[]>)
-  }): this {
-
-    this._onStudioCredentials = onCredentials
-    this._onStudioBucketCreated = onBucketCreated
-    this._onLoadBucketCredentials = onLoadBucketCredentials
-
-    // creating file meta for any buckets
-    this._syncMetadata('*')
-
-    return this;
-  }
+class NfsServer extends NfsStudio {
 
   /**
    * The 'listen' method is used to bind and start a server to a particular port and optionally a hostname.
@@ -307,24 +85,28 @@ class NfsServer {
     })
 
     if(this._onStudioCredentials != null) {
+      
       this._router.groups('/studio' , (router) => {
-        router.get('/' , this._studio)
-        router.post('/api/login',this._studioLogin)
-        router.get('/api/storage',this._authStudioMiddleware,this._studioStorage)
-        router.get('/preview/*', this._authStudioMiddleware,this._studioPreview)
-        router.get('/api/preview/*', this._authStudioMiddleware,this._stduioPreviewText)
-        router.patch('/api/preview/*', this._authStudioMiddleware,this._stduioPreviewTextEdit)
-        router.delete('/api/logout',this._authStudioMiddleware,this._studioLogout)
-        router.get('/api/buckets',this._authStudioMiddleware,this._studioBucket)
-        router.post('/api/buckets',this._authStudioMiddleware,this._studioBucketCreate)
-        router.get('/api/files/*',this._authStudioMiddleware,this._studioFiles)
-        router.put('/api/files/*', this._authStudioMiddleware,this._studioEdit)
-        router.delete('/api/files/*', this._authStudioMiddleware,this._studioRemove)
-        router.post('/api/upload',this._authStudioMiddleware,this._studioUpload)
-        router.post('/api/download',this._studioDownload)
-
+        router.get('/' , this.studio)
+        router.post('/api/login',this.studioLogin)
+        router.get('/api/storage',this._authStudioMiddleware,this.studioStorage)
+        router.get('/preview/*', this._authStudioMiddleware,this.studioPreview)
+        router.get('/api/preview/*', this._authStudioMiddleware,this.studioPreviewText)
+        router.patch('/api/preview/*', this._authStudioMiddleware,this.studioPreviewTextEdit)
+        router.delete('/api/logout',this._authStudioMiddleware,this.studioLogout)
+        router.get('/api/buckets',this._authStudioMiddleware,this.studioBucket)
+        router.post('/api/buckets',this._authStudioMiddleware,this.studioBucketCreate)
+        router.get('/api/files/*',this._authStudioMiddleware,this.studioFiles)
+        router.put('/api/files/*', this._authStudioMiddleware,this.studioEdit)
+        router.delete('/api/files/*', this._authStudioMiddleware,this.studioRemove)
+        router.post('/api/upload',this._authStudioMiddleware,this.studioUpload)
+        router.post('/api/download',this._authStudioMiddleware,this.studioDownload)
+        router.get('/shared/*',this.studioShared)
+        router.get('/api/shared/*',this._authStudioMiddleware,this.studioGetPathShared)
+ 
         return router
       })
+
     } else {
       this._router.get('/studio' , ({ req , res }) => {
         res.writeHead(403 , { 'Content-Type': 'text/xml'})
@@ -395,7 +177,7 @@ class NfsServer {
           const buckets : string[] = this._buckets == null ? [] : await this._buckets()
           
           for(const bucket of buckets) {
-            this._queue.add(() => this._removeOldDirInTrash(bucket))
+            this._queue.add(() => this._utils.removeOldDirInTrash(bucket))
           }
         })
       }
@@ -520,7 +302,7 @@ class NfsServer {
             return res.end(xml([error],{ declaration: true }))
         }
   
-        const { stream , header , set } = await this._makeStream({
+        const { stream , header , set } = await this._utils.makeStream({
           bucket   : bucket,
           filePath : String(path) ,
           range    : req.headers?.range,
@@ -580,11 +362,11 @@ class NfsServer {
 
       const fileName = `${path}`.replace(/^\/+/, '')
 
-      const directory = this._normalizeDirectory({ bucket , folder : null })
+      const directory = this._utils.normalizeDirectory({ bucket , folder : null })
 
-      const fullPath = this._normalizePath({ directory , path : String(path) , full : true })
+      const fullPath = this._utils.normalizePath({ directory , path : String(path) , full : true })
 
-      if(!(await this._fileExists(fullPath))) {
+      if(!(await this._utils.fileExists(fullPath))) {
 
         if(this._debug) {
           console.log({
@@ -595,9 +377,7 @@ class NfsServer {
           })
         }
 
-        return res.status(404).json({
-          message : `No such directory or file, '${fileName}'`
-        })
+        return res.notFound(`No such directory or file, '${fileName}'`)
       }
   
       const key        = String(token)
@@ -621,10 +401,7 @@ class NfsServer {
         console.log(err)
       }
 
-      return res.status(500)
-      .json({
-        message : err.message
-      })
+      return res.serverError(err.message)
     }
   }
 
@@ -635,14 +412,12 @@ class NfsServer {
 
       const { path : filename } = body
 
-      const directory = this._normalizeDirectory({ bucket , folder : null })
+      const directory = this._utils.normalizeDirectory({ bucket , folder : null })
 
-      const path = this._normalizePath({ directory , path : String(filename) , full : true})
+      const path = this._utils.normalizePath({ directory , path : String(filename) , full : true})
   
-      if(!(await this._fileExists(path))) {
-        return res.status(404).json({
-          message : `no such file or directory, '${filename}'`
-        })
+      if(!(await this._utils.fileExists(path))) {
+        return res.notFound(`no such file or directory, '${filename}'`)
       }
 
       const stat = fsSystem.statSync(path)
@@ -651,7 +426,7 @@ class NfsServer {
         return res.badRequest('The path is a directory, cannot be read from the filesystem')
       }
   
-      return res.json({
+      return res.ok({
         base64 : await fsSystem.promises.readFile(path, 'base64')
       })
   
@@ -661,10 +436,7 @@ class NfsServer {
         console.log(err)
       }
 
-      return res.status(500)
-      .json({
-        message : err.message
-      })
+      return res.serverError(err.message)
     }
   }
 
@@ -676,14 +448,12 @@ class NfsServer {
 
       const { path : filename , range } = body
 
-      const directory = this._normalizeDirectory({ bucket , folder : null })
+      const directory = this._utils.normalizeDirectory({ bucket , folder : null })
 
-      const fullPath = this._normalizePath({ directory , path : String(filename) , full : true})
+      const fullPath = this._utils.normalizePath({ directory , path : String(filename) , full : true})
       
-      if(!(await this._fileExists(fullPath))) {
-        return res.status(404).json({
-          message : `no such file or directory, '${filename}'`
-        })
+      if(!(await this._utils.fileExists(fullPath))) {
+        return res.notFound(`no such file or directory, '${filename}'`)
       }
 
       const stat = fsSystem.statSync(fullPath)
@@ -733,18 +503,16 @@ class NfsServer {
       let { folder } = body
 
       if(folder != null) {
-        folder = this._normalizeFolder(String(folder))
+        folder = this._utils.normalizeFolder(String(folder))
       }
    
-      const directory = this._normalizeDirectory({ bucket , folder })
+      const directory = this._utils.normalizeDirectory({ bucket , folder })
 
-      if(!(await this._fileExists(directory))) {
-        return res.status(404).json({
-          message : `No such directory or folder, '${folder}'`
-        })
+      if(!(await this._utils.fileExists(directory))) {
+        return res.notFound(`No such directory or folder, '${folder}'`)
       }
   
-      const fileDirectories = await this._files(directory , { ignore : this._trash })
+      const fileDirectories = await this._utils.files(directory , { ignore : this._trash })
 
       const storage = fileDirectories.map((name) => {
         const stat = fsSystem.statSync(name)
@@ -764,9 +532,7 @@ class NfsServer {
         console.log(err)
       }
 
-      return res.status(500).json({
-        message : err.message
-      })
+      return res.serverError(err.message)
     }
   }
 
@@ -776,7 +542,7 @@ class NfsServer {
   
       const { bucket } = req
 
-      const directory = this._normalizeDirectory({ bucket , folder : null })
+      const directory = this._utils.normalizeDirectory({ bucket , folder : null })
 
       const folders = fsSystem.readdirSync(directory)
 
@@ -790,9 +556,7 @@ class NfsServer {
         console.log(err)
       }
 
-      return res.status(500).json({
-        message : err.message
-      })
+      return res.serverError(err.message)
     }
   }
 
@@ -802,28 +566,24 @@ class NfsServer {
       const { bucket } = req
 
       if(!Array.isArray(files?.file)) {
-        return res.status(400).json({
-          message : 'The file is required.'
-        })
+        return res.badRequest('The file is required.')
       }
 
       const file = files?.file[0]
 
       if (file == null) {
-        return res.status(400).json({
-          message : 'The file is required.'
-        })
+        return res.badRequest('The file is required.')
       }
 
       let { folder } = body
     
       if(folder != null) {
-        folder = this._normalizeFolder(String(folder))
+        folder = this._utils.normalizeFolder(String(folder))
       }
 
-      const directory = this._normalizeDirectory({ bucket , folder })
+      const directory = this._utils.normalizeDirectory({ bucket , folder })
 
-      if (!(await this._fileExists(directory))) {
+      if (!(await this._utils.fileExists(directory))) {
 
         if(this._debug) {
           console.log({ directory , bucket , folder })
@@ -840,9 +600,9 @@ class NfsServer {
           .pipe(fsSystem.createWriteStream(to))
           .on('finish', () => {
             // remove temporary from chunked by nfs-client
-            this._remove(to)
+            this._utils.remove(to)
             // remove temporary from server
-            this._remove(file,{ delayMs : 0 })
+            this._utils.remove(file,{ delayMs : 0 })
             return resolve(null)
           })
           .on('error', (err) => reject(err));
@@ -851,12 +611,12 @@ class NfsServer {
       }
       
 
-      await writeFile(file.tempFilePath , this._normalizePath({ directory , path : file.name , full : true }))
+      await writeFile(file.tempFilePath , this._utils.normalizePath({ directory , path : file.name , full : true }))
 
-      await this._getMetadata(bucket)
+      await this._utils.getMetadata(bucket)
 
       return res.ok({
-        path : this._normalizePath({ directory : folder , path : file.name }),
+        path : this._utils.normalizePath({ directory : folder , path : file.name }),
         name : file.name,
         size : file.size
       })
@@ -890,12 +650,12 @@ class NfsServer {
       }
 
       if(folder != null) {
-        folder = this._normalizeFolder(String(folder))
+        folder = this._utils.normalizeFolder(String(folder))
       }
 
-      const directory = this._normalizeDirectory({ bucket , folder })
+      const directory = this._utils.normalizeDirectory({ bucket , folder })
 
-      if (!(await this._fileExists(directory))) {
+      if (!(await this._utils.fileExists(directory))) {
         await fsSystem.promises.mkdir(directory, {
           recursive: true
         })
@@ -924,7 +684,7 @@ class NfsServer {
               return resolve(null)
             }
 
-            const partPath = this._normalizePath({
+            const partPath = this._utils.normalizePath({
               directory,
               path : paths[index],
               full: true
@@ -947,7 +707,7 @@ class NfsServer {
             })
       
             readStream.on('end', () => {
-              this._remove(partPath,{ delayMs : 0 })
+              this._utils.remove(partPath,{ delayMs : 0 })
               next(index + 1)
             })
 
@@ -958,14 +718,14 @@ class NfsServer {
         })
       }
       
-      const to = this._normalizePath({ directory , path : name , full : true })
+      const to = this._utils.normalizePath({ directory , path : name , full : true })
       
       await writeFile(to)
 
-      await this._getMetadata(bucket)
+      await this._utils.getMetadata(bucket)
 
       return res.ok({
-        path : this._normalizePath({ directory : folder , path : name }),
+        path : this._utils.normalizePath({ directory : folder , path : name }),
         name : name,
         size : fsSystem.statSync(to).size
       })
@@ -990,24 +750,20 @@ class NfsServer {
       let { folder , base64 , name } = body
 
       if(folder != null) {
-        folder = this._normalizeFolder(String(folder))
+        folder = this._utils.normalizeFolder(String(folder))
       }
 
       if(base64 === '' || base64 == null) {
-        return res.status(400).json({
-          message : 'The base64 is required.'
-        })
+        return res.badRequest('The base64 is required.')
       }
 
       if(name === '' || name == null) {
-        return res.status(400).json({
-          message : 'The name is required.'
-        })
+        return res.badRequest('The name is required.')
       }
     
-      const directory = this._normalizeDirectory({ bucket , folder})
+      const directory = this._utils.normalizeDirectory({ bucket , folder})
 
-      if (!(await this._fileExists(directory))) {
+      if (!(await this._utils.fileExists(directory))) {
         await fsSystem.promises.mkdir(directory, {
           recursive: true
         })
@@ -1021,7 +777,7 @@ class NfsServer {
 
       await writeFile(String(base64), to)
 
-      await this._getMetadata(bucket)
+      await this._utils.getMetadata(bucket)
 
       return res.ok({
         path : folder ? `${folder}/${name}` : name,
@@ -1048,20 +804,17 @@ class NfsServer {
 
       const path = `${p}`.replace(/^\/+/, '')
 
-      const directory = this._normalizeDirectory({ bucket , folder : null })
+      const directory = this._utils.normalizeDirectory({ bucket , folder : null })
       
-      const fullPath = this._normalizePath({ directory , path : path , full : true})
+      const fullPath = this._utils.normalizePath({ directory , path : path , full : true})
      
-      if(!(await this._fileExists(fullPath))) {
-        return res.status(404)
-        .json({
-          message : `No such directory or file, '${path}'`
-        })
+      if(!(await this._utils.fileExists(fullPath))) {
+        return res.notFound(`No such directory or file, '${path}'`)
       }
 
-      this._queue.add(async () => await this._trashed({ path, bucket }))
+      this._queue.add(async () => await this._utils.trashed({ path, bucket }))
 
-      await this._getMetadata(bucket)
+      await this._utils.getMetadata(bucket)
       
       return res.ok()
   
@@ -1071,16 +824,14 @@ class NfsServer {
         console.log(err)
       }
 
-      return res.status(500).json({
-        message : err.message
-      })
+      return res.serverError(err.message)
     }
   }
 
   private _apiConnect = async ({ res , body } : TContext) => {
   
     const { token , secret , bucket } = body
-
+   
     if(this._credentials != null) {
 
       const credentials = await this._credentials({ 
@@ -1088,23 +839,21 @@ class NfsServer {
         secret : String(secret),
         bucket : String(bucket)
       })
-
+    
       if(!credentials) {
-        return res.status(401).json({
-          message : 'Invalid credentials. Please check the your credentials'
-        })
+        return res.unauthorized('Invalid credentials. Please check the your credentials')
       }
     }
 
-    const directory = pathSystem.join(pathSystem.resolve(), this._normalizeDirectory({ bucket : String(bucket) }))
+    const directory = pathSystem.join(pathSystem.resolve(), this._utils.normalizeDirectory({ bucket : String(bucket) }))
       
-    if(!(await this._fileExists(directory))) {
+    if(!(await this._utils.fileExists(directory))) {
       await fsSystem.promises.mkdir(directory, {
         recursive: true
       })
     }
 
-    return res.json({
+    return res.ok({
       accessToken : jwt.sign({
         data : {
           issuer : 'nfs-server',
@@ -1125,20 +874,16 @@ class NfsServer {
     const token = String(headers.authorization).split(' ')[1]
 
     if(token == null) {
-      return res.status(401).json({
-        message : 'Please check your credentials. Are they valid ?'
-      })
+      return res.unauthorized('Please check your credentials. Are they valid ?')
     }
 
     const payload = token.split('.')[1]
 
     if(payload == null || payload === '') {
-      return res.status(401).json({
-        message : 'Please check your credentials. Are they valid ?'
-      })
+      return res.unauthorized('Please check your credentials. Are they valid ?')
     }
 
-    const decodedPayload = this._safelyParseJSON(Buffer.from(payload, 'base64').toString('utf-8'));
+    const decodedPayload = this._utils.safelyParseJSON(Buffer.from(payload, 'base64').toString('utf-8'));
   
     if (decodedPayload.exp) {
       const currentTime = Math.floor(Date.now() / 1000)
@@ -1151,7 +896,7 @@ class NfsServer {
         const minutes = Math.floor((timeRemaining % (60 * 60)) / 60)
         const seconds = timeRemaining % 60;
        
-        return res.json({
+        return res.ok({
           iat: new Date(decodedPayload.iat * 1000),
           exp: new Date(decodedPayload.exp * 1000),
           expire : {
@@ -1169,927 +914,6 @@ class NfsServer {
 
     return res.badRequest("Token does not have an expiration time.")
 
-  }
-
-  private _syncMetadata = async (syncBuckets: string = '*') => {
-
-    const rootFolder = this._rootFolder
-
-    const buckets = (this._buckets == null 
-      ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
-        return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
-      }) 
-      : await this._buckets()
-    )
-
-    for(const bucket of buckets) {
-      
-      if(syncBuckets === '*' || syncBuckets === bucket) {
-
-        const targetDir = `${rootFolder}/${bucket}`
-
-      const analyzeDirectory = (dirPath: string): any => {
-        let fileCount = 0;
-        let folderCount = 0;
-        let totalSize = 0;
-      
-        const traverseDirectory = (currentPath: string) => {
-
-          const items = fsSystem.readdirSync(currentPath)
-
-          for(const item of items) {
-
-            const itemPath = pathSystem.join(currentPath, item);
-            const stats = fsSystem.statSync(itemPath);
-
-            if (stats.isDirectory() && item === this._trash) {
-              continue;
-            }
-      
-            if (stats.isDirectory()) {
-              folderCount++;
-              traverseDirectory(itemPath)
-            } 
-            
-            if (stats.isFile() && item !== this._metadata) {
-              fileCount++;
-              totalSize += stats.size
-            }
-
-          }
-      
-        }
-      
-        traverseDirectory(dirPath);
-      
-        return { fileCount, folderCount, totalSize };
-      }
-
-      const result = analyzeDirectory(targetDir);
-     
-      // write file metadata to bucket
-      fsSystem.writeFileSync(`${targetDir}/${this._metadata}`, 
-        JSON.stringify({ 
-          bucket , 
-          info : {
-            files : result.fileCount,
-            folders : result.folderCount,
-            size : result.totalSize,
-            sizes : {
-              bytes : result.totalSize,
-              kb : (result.totalSize / 1024),
-              mb : (result.totalSize / (1024 * 1024)),
-              gb : (result.totalSize / (1024 * 1024 * 1024)),
-            }
-          } 
-        },null,2),
-        'utf-8'
-      )
-
-      }
-
-      
-    }
-  }
-
-  private _studio = async ({  res , cookies } : TContext) => {
-
-    const auth = cookies['auth.session']
-
-    if(!auth || auth == null) {
-      const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','login.html'), 'utf8')
-
-      const minifiedHtml = await minify(html, {
-        collapseWhitespace: true,
-        removeComments: true,
-        minifyCSS: true,
-        minifyJS: true
-      })
-      return res.html(minifiedHtml);
-    }
-
-    const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','index.html'), 'utf8')
-
-    const minifiedHtml = await minify(html, {
-      collapseWhitespace: true,
-      removeComments: true,
-      minifyCSS: true,
-      minifyJS: true
-    });
-
-    return res.html(minifiedHtml);
-  }
-
-  private _studioStorage = async ({  req , res } : TContext) => {
-
-    const allowBuckets : string[] = req.buckets ?? []
-
-    const rootFolder = this._rootFolder
-
-    const buckets = (this._buckets == null 
-      ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
-        return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
-      }) 
-      : await this._buckets()
-    ).filter((bucket : string) => allowBuckets.includes(bucket) || allowBuckets[0] === '*')
-
-
-    let totalSize: number = 0;
-
-    for(const bucket of buckets) {
-
-      const metadata = await this._getMetadata(bucket);
-
-      if(metadata == null) continue;
-
-      totalSize += Number(metadata.info?.size ?? 0);
-
-    }
-
-    return res.ok({
-      buckets : buckets.length,
-      storage : {
-        bytes : totalSize,
-        kb : Number((totalSize / 1024).toFixed(2)),
-        mb : Number((totalSize / (1024 * 1024)).toFixed(2)),
-        gb : Number((totalSize / (1024 * 1024 * 1024)).toFixed(2))
-      }
-    })
-
-  }
-
-  private _studioPreview = async ({  req, res , params } : TContext) => {
-
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
- 
-    const [bucket, ...rest] = String(path).split('/');
-
-    const allowBuckets : string = req.buckets || []
-    
-    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      return res.forbidden()
-    } 
-
-    let filePath = rest.join('/')
-
-    if(filePath != null) {
-      filePath = this._normalizeFolder(String(filePath))
-    }
-
-    const directory = this._normalizeDirectory({ bucket , folder : null })
-
-    if(!fsSystem.existsSync(pathSystem.join(pathSystem.resolve(),directory,filePath))) {
-      return res.notFound(`The directory '${path}' does not exist`)
-    }
-
-    const extension = pathSystem.extname(filePath).replace(/\./g,'')
-    const textFileExtensions = [
-      'txt', 'md', 'csv', 'json', 'xml', 'html', 'css', 
-      'js', 'ts','php','h','c', 'java','go','rs', 'py', 'sh', 'sql',
-      'log', 'ini', 'bat', 'yml','yaml','key',
-      'conf', 'rtf', 'tex', 'srt', 'plist', 'env',
-    ];
-
-    if(textFileExtensions.includes(extension)) {
-
-      const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, 'studio','vs-code.html'), 'utf8')
-      
-      const minifiedHtml = await minify(html, {
-        collapseWhitespace: true,
-        removeComments: true,
-        minifyCSS: true,
-        minifyJS: true
-      })
-
-      const language = {
-        'ts' : 'typescript',
-        'js' : 'javascript'
-      }[extension] ?? extension
-     
-      return res.html(minifiedHtml.replace('{{language}}',language))
-    }
-
-    const { stream , set } = await this._makeStream({
-      bucket   : bucket,
-      filePath : String(filePath),
-      range    : req.headers?.range,
-      download : true
-    })
-
-    set(res)
-    
-    return stream.pipe(res)
-
-  }
-
-  private _stduioPreviewText = async ({  req, res , params } : TContext) => {
-
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
- 
-    const [bucket, ...rest] = String(path).split('/');
-
-    const allowBuckets : string = req.buckets || []
-    
-    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      return res.forbidden()
-    }
-      
-    let filePath = rest.join('/')
-
-    if(filePath != null) {
-      filePath = this._normalizeFolder(String(filePath))
-    }
-
-    const directory = this._normalizeDirectory({ bucket , folder : null })
-
-    const fullPath = this._normalizePath({ directory , path : String(filePath) , full : true })
-
-    if(!fsSystem.existsSync(fullPath)) {
-      return res.notFound(`The directory '${path}' does not exist`)
-    }
-
-    const stat = fsSystem.statSync(fullPath)
-
-    if(stat.isDirectory()) {
-      return res.badRequest('The path is a directory, cannot be read from the filesystem')
-    }
-
-    const text = await fsSystem.promises.readFile(fullPath,'utf8')
-
-    return res.send(text);
-
-  }
-
-  private _stduioPreviewTextEdit = async ({  req, res , params , body } : TContext) => {
-
-    if(body.content == null) {
-      return res.badRequest('Please enter a content for rewrite file')
-    }
-    
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
- 
-    const [bucket, ...rest] = String(path).split('/');
-
-    const allowBuckets : string = req.buckets || []
-    
-    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      return res.forbidden()
-    }
-      
-    let filePath = rest.join('/')
-
-    if(filePath != null) {
-      filePath = this._normalizeFolder(String(filePath))
-    }
-
-    const directory = this._normalizeDirectory({ bucket , folder : null })
-
-    const fullPath = pathSystem.join(pathSystem.resolve(),directory,filePath)
-
-    if(!fsSystem.existsSync(fullPath)) {
-      return res.notFound(`The directory '${path}' does not exist`)
-    }
-
-    fsSystem.writeFileSync(fullPath , String(body.content),'utf-8')
-
-    return res.ok()
-
-  }
-
-  private _studioLogin = async ({  res , body } : TContext) => {
-
-    if(this._onStudioCredentials == null) {
-      return res.badRequest('Please enable the studio')
-    }
-
-    const { username , password } = body
-
-    if(!username) {
-      return res.badRequest('Please enter an username')
-    }
-
-    const check = await this._onStudioCredentials({ username : String(username), password : String(password) })
-    
-    if(!check?.logged)   return res.unauthorized('Please check your username and password')
-    
-    const EXPIRED = 43_200
-    const session = jwt.sign({
-      data : {
-        issuer : 'nfs-studio',
-        sub : {
-          buckets : check?.buckets ?? [],
-          permissions : ['*'],
-          token  : Buffer.from(`${+new Date()}`).toString('base64')
-        }
-      }
-    }, this._jwtSecret , { 
-      expiresIn : EXPIRED , 
-      algorithm : 'HS256'
-    })
-  
-    res.setHeader('Set-Cookie', 
-      `auth.session=${session}; HttpOnly; Max-Age=${EXPIRED}; Path=/studio`
-    )
-
-    return res.ok()
-  }
-
-  private _studioLogout = async ({  res } : TContext) => {
-
-    res.setHeader('Set-Cookie', 
-      `auth.session=; HttpOnly; Max-Age=0; Path=/studio`
-    )
-
-    return res.ok()
-  }
-
-  private _studioUpload = async ({ req, res , files , body } : TContext) => {
-    try {
-
-      if(!Array.isArray(files?.file) || files?.file[0] == null) {
-        return res.badRequest('The file is required.')
-      }
-
-      if(body.path == null || body.path === '') {
-        return res.badRequest('The path is required.')
-      }
-
-      const file = files?.file[0]
-
-      const [bucket, ...rest] = String(body.path).split('/')
-
-      const allowBuckets : string = req.buckets || []
-
-      if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-        return res.forbidden()
-      }
-
-      if(this._buckets != null && !(await this._buckets()).includes(bucket)) {
-        return res.forbidden()
-      }
-      
-      let folder = rest.join('/')
-
-      if(folder != null) {
-        folder = this._normalizeFolder(String(folder))
-      }
-
-      const directory = this._normalizeDirectory({ bucket , folder })
-
-      if (!(await this._fileExists(directory))) {
-
-        if(this._debug) {
-          console.log({ directory , bucket , folder })
-        }
-
-        await fsSystem.promises.mkdir(directory, {
-          recursive: true
-        })
-      }
-
-      const writeFile = (file : string , to : string) => {
-        return new Promise<null>((resolve, reject) => {
-          fsSystem.createReadStream(file)
-          .pipe(fsSystem.createWriteStream(to))
-          .on('finish', () => {
-            // remove temporary from server
-            this._remove(file,{ delayMs : 0 })
-            return resolve(null)
-          })
-          .on('error', (err) => reject(err));
-          return 
-        })
-      }
-
-      const name = `${file.name}`
-
-      await writeFile(file.tempFilePath , this._normalizePath({ directory , path : name , full : true }))
-
-      await this._syncMetadata(bucket)
-
-      return res.ok({
-        path : this._normalizePath({ directory : folder , path :name }),
-        name : name,
-        size : file.size
-      })
-
-    } catch (err) {
-
-      if(this._debug) {
-        console.log(err)
-      }
-
-      throw err
-    }
-  }
-
-  private _studioDownload = async ({ req, res , body } : TContext) => {
-    try {
-
-      const { files } = body as { files : any[]}
-
-      if(!files?.length) {
-
-        return res.badRequest('Please specify which files to download.')
-      }
-
-      const items = files.map(v => {
-        return {
-          ...v,
-          path : this._normalizePath({ directory : this._rootFolder, path : String(v.path) , full : true })
-        }
-      })
-      
-      const archive = archiver('zip', { zlib: { level: 1 } });
-
-      res.setHeader('Content-Disposition', `attachment; filename="NFS-studio_${+new Date()}.zip"`);
-      res.setHeader('Content-Type', 'application/zip');
-    
-      archive.pipe(res)
-      
-      for (const item of items) {
-        if (item.isFolder) {
-          archive.directory(item.path, item.name);
-          continue
-        } 
-        archive.file(item.path, { name: item.name });
-      }
-      
-      archive.finalize();
-
-    } catch (err) {
-
-      if(this._debug) {
-        console.log(err)
-      }
-
-      throw err
-    }
-  }
-
-  private _studioBucket = async ({ req , res } : TContext) => {
-   
-    const allowBuckets : string[] = req.buckets ?? []
-
-    const rootFolder = this._rootFolder
-
-    const buckets = (this._buckets == null 
-      ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
-        return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
-      }) 
-      : await this._buckets()
-    ).filter((bucket : string) => allowBuckets.includes(bucket) || allowBuckets[0] === '*')
-
-    const lists : any[] = []
-
-    for(const bucket of buckets) {
-
-      if(allowBuckets.includes(bucket) || allowBuckets[0] === '*') {
-
-        const fullPath = pathSystem.join(pathSystem.resolve(),this._rootFolder,bucket)
-
-        if(!(await this._fileExists(fullPath))) {
-          await fsSystem.promises.mkdir(fullPath, {
-            recursive: true
-          })
-
-          if(this._onStudioBucketCreated != null) {
-            const random  = () => [1,2,3].map(v => Math.random().toString(36).substring(3)).join('')
-            await this._onStudioBucketCreated({
-              bucket : String(bucket),
-              token : String(random()),
-              secret : String(random())
-            })
-          }
-        }
-
-        const loadCredentials = this._onLoadBucketCredentials == null ? [] : await this._onLoadBucketCredentials();
-
-        const credentials = loadCredentials.find(v => v.bucket === bucket);
-
-        const bytes = Number((await this._getMetadata(bucket))?.info?.size ?? 0);
-
-        lists.push({
-          [bucket] : {
-            credentials,
-            storage :  {
-              bytes,
-              kb : Number((bytes / 1024).toFixed(2)),
-              mb : Number((bytes / (1024 * 1024)).toFixed(2)),
-              gb : Number((bytes / (1024 * 1024 * 1024)).toFixed(2))
-            }
-          }
-        })
-      }
-    }
-
-    return res.ok({
-      buckets : lists
-    })
-  }
-
-  private _studioBucketCreate = async ({ req , res , body } : TContext) => {
-
-    const { bucket , token , secret } = body
-
-    if([bucket].some(v => v == null || v ==='')) {
-      return res.badRequest('The bucket is required.')
-    }
-
-    const buckets : string[] = (this._buckets == null ? [] :await  this._buckets())
-    
-    if(buckets.some(v => v === bucket)) {
-      return res.badRequest('The bucket already exists.')
-    }
-   
-    const directory = this._normalizeDirectory({ bucket : String(bucket) , folder : null })
-
-    if(!(await this._fileExists(directory))) {
-      await fsSystem.promises.mkdir(directory, {
-        recursive: true
-      })
-    }
-
-    const randomString = (length = 8) => Math.random().toString(36).substr(2, length)
-
-    if(this._onStudioBucketCreated != null) {
-      await this._onStudioBucketCreated({
-        bucket : String(bucket),
-        token :  String(token == null  || token === '' ? randomString() : token),
-        secret : String(secret == null || secret === '' ? randomString() : secret),
-      })
-    }
-    
-    return res.ok()
-
-  }
-
-  private _studioFiles = async ({ req, res , params } : TContext) => {
-   
-    const rootFolder = this._rootFolder
-
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
-
-    const [bucket] = String(path).split('/')
-
-    const allowBuckets : string = req.buckets || []
-    
-    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      return res.forbidden()
-    }
-
-    const targetDir = `${rootFolder}/${path}`
-
-    if(!fsSystem.existsSync(pathSystem.join(pathSystem.resolve(),targetDir))) {
-      return res.notFound(`The directory '${path}' does not exist`)
-    }
-
-    const files = await this._fileStructure(targetDir , { includeFiles : true })
-    
-    return res.ok({
-      files : files.sort((a, b) => {
-
-        if (a.name.includes('@') && !b.name.includes('@')) {
-          return -1;
-        }
-        if (!a.name.includes('@') && b.name.includes('@')) {
-          return 1;
-        }
-      
-        if (a.isFolder !== b.isFolder) {
-          return b.isFolder - a.isFolder;
-        }
-  
-        return +new Date(a.lastModified) - +new Date(b.lastModified);
-      })
-    })
-      
-  }
-
-  private _studioEdit = async ({ req, res , params , body } : TContext) => {
-   
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
- 
-    const [bucket, ...rest] = String(path).split('/');
-
-    const allowBuckets : string = req.buckets || []
-    
-    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      return res.forbidden()
-    }
-
-    const { rename } = body
-
-    if(rename == null || rename === '') {
-      return res.badRequest('Please enter the name you wish to use.')
-    }
-      
-    let filePath = rest.join('/')
-
-    if(filePath != null) {
-      filePath = this._normalizeFolder(String(filePath))
-    }
-
-    const oldPath = this._normalizeDirectory({ bucket , folder : filePath })
-
-    if(!fsSystem.existsSync(pathSystem.join(pathSystem.resolve(),oldPath))) return res.notFound()
-
-    const newPath = this._normalizeDirectory({ 
-      bucket , 
-      folder : `${pathSystem.dirname(filePath)}/${rename}${pathSystem.extname(filePath)}`
-    })
-
-    fsSystem.renameSync(
-      pathSystem.join(pathSystem.resolve(),oldPath),
-      pathSystem.join(pathSystem.resolve(),newPath),
-    );
-
-    return res.ok({
-      name : rename
-    })
-      
-  }
-
-  private _studioRemove = async ({ req, res , body , params } : TContext) => {
-   
-    const data = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
- 
-    const [bucket, ...rest] = String(data).split('/');
-
-    const path = rest.join('/')
-
-    const allowBuckets : string = req.buckets || []
-    
-    if(!(allowBuckets.includes(bucket) || allowBuckets[0] === '*')) {
-      return res.forbidden()
-    }
-
-    const filePath = this._normalizeFolder(String(path))
-
-    const fullPath = pathSystem.join(pathSystem.resolve(),this._normalizeDirectory({ bucket , folder : filePath }))
-
-    if(!fsSystem.existsSync(fullPath)) return res.notFound()
-
-    const stats = fsSystem.statSync(fullPath) 
-
-    if (stats.isDirectory()) {
-
-      if(path.includes(this._trash)) {
-        fsSystem.rmSync(fullPath, { recursive: true, force: true })
-        return res.ok()
-      }
-
-      this._queue.add(async () => await this._trashedWithFolder({ path , bucket  }))
-
-      return res.ok()
-    }
-
-    if(path.includes(this._trash)) {
-      this._remove(fullPath , { delayMs : 0 })
-      await this._syncMetadata(bucket)
-      return res.ok()
-    }
-
-    this._queue.add(async () => await this._trashed({ path , bucket  }))
-
-    return res.ok()
-      
-  }
-
-  private _getMetadata = async ( bucket : string) => {
-
-    const directory : string = pathSystem.join(pathSystem.resolve(),`${this._rootFolder}/${bucket}/${this._metadata}`);
-            
-    const checkMetadata : boolean = fsSystem.existsSync(directory);
-
-    if(!checkMetadata) return null
-
-    const metadata : string = await fsSystem.promises.readFile(directory,'utf-8');
-
-    return this._safelyParseJSON(metadata)
-  }
-
-  private _fileStructure = async (dirPath: string , { includeFiles = false } : { includeFiles ?: boolean} = {}): Promise<any[]> => {
-    const items: any[] = [];
-
-    const files = fsSystem.readdirSync(dirPath)
-
-    for (const file of files) {
-
-      if(file === this._metadata) continue
-
-      const path = pathSystem.join(dirPath, file)
-      const fullPath = pathSystem.join(pathSystem.resolve(),dirPath, file)
-      const stats = fsSystem.lstatSync(fullPath)
-
-      const lastModified = stats.mtime
-
-      if (stats.isDirectory()) {
-
-        const files = (await this._files(fullPath , { ignore : this._trash }))
-        .map(v => {
-          const stat = fsSystem.statSync(v)
-          const size = stat.size
-          return {
-            name : pathSystem.basename(v),
-            size
-          }
-        })
-
-        items.push({
-            name: file,
-            path: path.replace(/\\/g, '/').replace(`${this._rootFolder}/`,''),
-            isFolder: true,
-            lastModified,
-            folders: await this._fileStructure(path , { includeFiles }),
-            size : files.reduce((prev , curr) => prev + curr.size,0)
-        })
-
-        continue
-      }
-
-      if(!includeFiles) continue
-          
-      const extension = pathSystem.extname(file).replace(/\./g,'')
-
-      items.push({
-          name: file,
-          path: path.replace(/\\/g, '/').replace(this._rootFolder, ''),
-          isFolder: false,
-          lastModified,
-          size: stats.size,
-          extension
-      })
-
-    }
-
-    return items;
-  };
-  
-  private async _makeStream ({ bucket , filePath , range , download = false } : { 
-    bucket : string; 
-    filePath : string; 
-    range ?: string; 
-    download : boolean 
-  }) {
-
-    const getContentType = (extension : string) => {
-        switch (String(extension).toLowerCase()) {
-            case 'txt':
-                return 'text/plain';
-            case 'html':
-            case 'htm':
-                return 'text/html';
-            case 'css':
-                return 'text/css';
-            case 'js':
-                return 'application/javascript';
-            case 'json':
-                return 'application/json';
-            case 'xml':
-                return 'application/xml';
-            case 'pdf':
-                return 'application/pdf';
-            case 'doc':
-            case 'docx':
-                return 'application/msword';
-            case 'xls':
-            case 'xlsx':
-                return 'application/vnd.ms-excel';
-            case 'ppt':
-            case 'pptx':
-                return 'application/vnd.ms-powerpoint';
-            case 'jpg':
-            case 'jpeg':
-                return 'image/jpeg';
-            case 'png':
-                return 'image/png';
-            case 'gif':
-                return 'image/gif';
-            case 'bmp':
-                return 'image/bmp';
-            case 'svg':
-                return 'image/svg+xml';
-            case 'mp3':
-                return 'audio/mpeg';
-            case 'wav':
-                return 'audio/wav';
-            case 'ogg':
-                return 'audio/ogg';
-            case 'mp4':
-                return 'video/mp4';
-            case 'avi':
-                return 'video/x-msvideo';
-            case 'mpeg':
-                return 'video/mpeg';
-            case 'zip':
-                return 'application/zip';
-            case 'rar':
-                return 'application/x-rar-compressed';
-            case 'tar':
-                return 'application/x-tar';
-            case 'gz':
-                return 'application/gzip';
-            case '7z':
-                return 'application/x-7z-compressed';
-            default:
-                return 'application/octet-stream';
-        }
-    }
-
-    const directory = this._normalizeDirectory({ bucket , folder : null})
-
-    const path =  this._normalizePath({ directory , path : filePath , full : true })
- 
-    const contentType = getContentType(String(filePath?.split('.')?.pop()))
-  
-    const stat = fsSystem.statSync(path)
-
-    if(stat.isDirectory()) {
-      throw new Error(`The stream is not support directory`)
-    }
-  
-    const fileSize = stat.size
-
-    const set = (header : Record<string,any> , filePath : string , code = 200 ) => {
-  
-      const extension = filePath.split('.').pop()
-  
-      const previews = [
-        'ogv','ogg','webm','wav','mp3','mp4',
-        'pdf',
-        'png','jpeg','jpg','gif','webp','svg','ico'
-      ]
-  
-      return (res : any) => {
-
-        if(previews.some(p => extension?.toLocaleLowerCase() === p)) {
-  
-          res.writeHead(download ? code : 206, header)
-  
-          return
-        }
-
-        if(download) {
-          res.setHeader('Content-Disposition', `attachment; filename=${+new Date()}.${extension}`)
-          res.setHeader('Content-Type', 'application/octet-stream')
-        }
-      }
-    }
-
-    if(contentType !== 'video/mp4') {
-      
-      const header = {
-        'Content-Length': fileSize,
-        'Content-Type': contentType,
-      };
-  
-      return {
-        stream : fsSystem.createReadStream(path),
-        header,
-        set : set(header,filePath)
-      }
-    }
-  
-    if(range == null) {
-      const header = {
-        'Content-Length': fileSize,
-        'Content-Type': contentType
-      }
-  
-      return {
-        stream :fsSystem.createReadStream(path)
-        .on('error' , (err) => {
-          throw err
-        }),
-        header,
-        set : set(header,filePath)
-      }
-    }
-
-    const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10)
-    const end = parts[1]? parseInt(parts[1], 10) : fileSize-1;
-  
-    const chunksize = (end - start) + 1
-  
-    const stream = fsSystem.createReadStream(path , { start, end })
-    .on('error' , (err) => {
-      throw err
-    })
-  
-    const header = {
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunksize,
-      'Content-Type': contentType
-    }
-  
-    return {
-      stream,
-      header,
-      set : set(header,filePath,206)
-    }
   }
 
   private _verify (token : string) {
@@ -2129,9 +953,7 @@ class NfsServer {
     const authorization = String(headers.authorization).split(' ')[1]
 
     if(authorization == null) {
-      return res.status(401).json({
-        message : 'Please check your credentials. Are they valid ?'
-      })
+      return res.unauthorized('Please check your credentials. Are they valid ?')
     }
 
     const { bucket , token } = this._verify(authorization)
@@ -2163,9 +985,7 @@ class NfsServer {
           return res.end(xml([error],{ declaration: true }))
       }
 
-      return res.status(401).json({
-        message : 'Please check your credentials. Are they valid ?'
-      })
+      return res.unauthorized('Please check your credentials. Are they valid ?')
     }
 
     try {
@@ -2195,193 +1015,9 @@ class NfsServer {
           return res.end(xml([error],{ declaration: true }))
       }
 
-      return res.status(400).json({
-        message : e.message
-      })
+      return res.badRequest(e.message)
     }
   }
-
-  private async _files (dir : string , { ignore = null} : { ignore ?: string | null } = {}) {
-    const directories = fsSystem.readdirSync(dir, { withFileTypes: true })
-
-    const files : any[] = await Promise.all(directories.map((directory) => {
-      const newDir = pathSystem.resolve(String(dir), directory.name)
-
-      if (directory.isDirectory() && (ignore != null && directory.name === ignore)) {
-        return null
-      }
-
-      return directory.isDirectory() ? this._files(newDir) : newDir
-    }))
-
-    return [].concat(...files.filter(Boolean))
-  }
-
-  private _normalizeFolder(folder : string): string {
-    return folder.replace(/^\/+/, '').replace(/[?#]/g, '')
-  }
-
-  private _normalizeDirectory({ bucket , folder } : { bucket : string , folder ?: string | null }): string {
-
-    return folder == null 
-      ? `${this._rootFolder}/${bucket}`
-      : `${this._rootFolder}/${bucket}/${this._normalizeFolder(folder)}` 
-  }
-
-  private _normalizePath({ directory , path , full = false } : { 
-    directory ?: string | null
-    path : string
-    full ?: boolean 
-  }): string {
-
-    path = path.replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
-    const normalized = full 
-    ? directory == null 
-      ?  pathSystem.join(pathSystem.resolve(),`${path}`)
-      :  pathSystem.join(pathSystem.resolve(),`${directory}/${path}`)
-    : directory == null 
-      ? `${path}`
-      : `${directory}/${path}`
-
-    return normalized
-    
-  }
-
-  private _remove (path : string , { delayMs = 1000 * 60 * 60  } : { delayMs ?: number } = {}) {
-
-    if(delayMs === 0) {
-      fsSystem.promises.unlink(path).catch(err => console.log(err))
-      return
-    }
-
-    setTimeout(() => {
-      fsSystem.promises.unlink(path).catch(err => console.log(err))
-    }, delayMs)
-
-    return
-  }
-
-  private async _trashed ({ path , bucket } : { 
-    path     : string
-    bucket   : string
-  }) {
-
-    const folder = `${this._trash}/${new Time().onlyDate().toString()}`
-
-    const directory = this._normalizeDirectory({ bucket , folder })
-
-    const newPath = this._normalizePath({ directory , path , full : true })
-
-    const currentPath = this._normalizePath({ directory : this._normalizeDirectory({ bucket , folder : null }) , path , full : true })
-
-    const newDirectory = pathSystem.dirname(newPath);
-
-    if(!(await this._fileExists(newDirectory))) {
-      await fsSystem.promises.mkdir(newDirectory, {
-        recursive: true
-      })
-    }
-
-    await fsSystem.promises
-    .rename(currentPath  , newPath)
-    .catch(err => {
-      console.log(err)
-      return
-    })
-
-    await this._syncMetadata(bucket)
-
-    return 
-  }
-
-  private async _trashedWithFolder ({ path , bucket } : { 
-    path     : string
-    bucket   : string
-  }) {
-
-    const folder = `${this._trash}/${new Time().onlyDate().toString()}`
-
-    const directory = this._normalizeDirectory({ bucket , folder })
-
-    const newPath = this._normalizePath({ directory , path  , full : true })
-
-    const currentPath = this._normalizePath({ directory : this._normalizeDirectory({ bucket , folder : null }) , path  , full : true })
-
-    if(!(await this._fileExists(newPath))) {
-      await fsSystem.promises.mkdir(newPath, {
-        recursive: true
-      })
-    }
-
-    await fsExtra
-    .copy(currentPath , newPath)
-    .then(_ => {
-      fsSystem.rmSync(currentPath, { recursive: true, force: true })
-    })
-    .catch(err => {
-      console.log(err)
-      return
-    })
-
-    await this._syncMetadata(bucket)
-
-    return 
-  }
-
-  private async _fileExists(path : string) : Promise<boolean> {
-    try {
-      await fsSystem.promises.stat(path);
-      return true
-    } catch (err) {
-      return false
-    }
-  }
-  
-  private _removeOldDirInTrash = async (bucket : string) => {
-    
-    const directory = this._normalizeDirectory({ bucket , folder : this._trash })
-
-    const files = fsSystem.readdirSync(directory)
-
-    for (const file of files) {
-
-      const dir = this._normalizePath({ directory , path : file , full : true })
-    
-      const stats = await fsSystem.promises.stat(dir)
-
-      if(!stats.isDirectory()) continue
-
-      const format = file.match(/^\d{4}-\d{2}-\d{2}/)
-
-      const folderDate = new Time(format ? format[0] : 0).toTimestamp()
-
-      const ago = new Time().minusDays(this._backup).toTimeStamp()
-
-      if(Number.isNaN(folderDate) || folderDate > ago) continue
-      
-      await this._removeDir(dir)
-
-    }
-
-  }
-
-  private _removeDir = async (path : string) => {
-
-    return await fsSystem.promises
-    .rm(path, { recursive: true })
-    .catch(_ => {
-      return
-    })
-  }
-
-  private _safelyParseJSON (v : string) {
-    try {
-      return JSON.parse(v)
-    }
-    catch (err) {
-      return {}
-    }
-  } 
 }
 
 export { NfsServer}
