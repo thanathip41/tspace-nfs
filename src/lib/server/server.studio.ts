@@ -250,21 +250,7 @@ export class NfsStudio extends NfsServerCore {
     res.setHeader('Set-Cookie', 
       `auth.session=${session}; HttpOnly; Max-Age=${EXPIRED}; Path=/studio`
     )
-
-    const rootFolder = this._rootFolder
-
-    const buckets = (this._buckets == null 
-      ? fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),rootFolder)).filter((name) => {
-        return fsSystem.statSync(pathSystem.join(rootFolder, name)).isDirectory();
-      }) 
-      : await this._buckets()
-    )
-
-    for(const bucket of buckets) {
-      console.log('sync metadata: ', bucket)
-      await this._utils.syncMetadata(bucket)
-    }
-
+    
     return res.ok()
   }
 
