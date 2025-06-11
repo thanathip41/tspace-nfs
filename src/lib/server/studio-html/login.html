@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com/3.4.14"></script>
-    <title>NFS-Studio</title>
+    <title>{{title}}</title>
+    {{logo.fav}}
     <style>
     #loading {
         display: none;
@@ -32,18 +33,37 @@
 
     <div class="flex items-center justify-center min-h-screen">
         <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
-        <h2 class="text-3xl font-bold text-center text-gray-900 dark:text-gray-100">Login to Studio</h2>
+        <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+            {{logo.login}}
+            <h2 class="text-center text-2xl/9 font-bold tracking-tight text-gray-900 dark:text-gray-100">Sign in to NFS</h2>
+        </div>
         <form id="loginForm" class="space-y-6" novalidate>
             <div>
-                <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">username</label>
-                <input type="username" id="username" name="username" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+                <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+                <input
+                    type="username" 
+                    id="username" 
+                    name="username" 
+                    required 
+                    autocomplete="off"
+                    class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                >
             </div>
             <div>
                 <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                <input type="password" id="password" name="password" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    required 
+                    autocomplete="off"
+                    class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                >
             </div>
             <div>
-            <button type="submit" class="w-full py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">Login</button>
+            <button type="submit" class="w-full py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">
+               Sign in
+            </button>
             </div>
             <div id="errorMessage" class="text-red-500 text-sm hidden">Invalid username or password. Please try again.</div>
         </form>

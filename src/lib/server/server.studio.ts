@@ -6,11 +6,87 @@ import { minify }        from 'html-minifier-terser'
 import xml               from 'xml'
 import { type TContext } from 'tspace-spear'
 import { NfsServerCore } from './server.core'
+import type { 
+  TCredentials, 
+  TLoginCrentials, 
+  TMonitors, 
+  TSetup 
+} from '../types'
 
-export class NfsStudio extends NfsServerCore {
+class NfsStudio extends NfsServerCore {
+
+  protected _onStudioBucketCreated    ?: ({ bucket , secret , token } : TCredentials) => Promise<void> | null
+  protected _onStudioCredentials      ?: ({ username, password } : TLoginCrentials) => Promise<{ logged : boolean , buckets : string[] }> | null
+  protected _onLoadBucketCredentials  ?: () => Promise<TCredentials[]>
+  protected _monitors                 ?: ({ host, memory , cpu } : TMonitors) => Promise<void>
+  protected _onSetup                    ?: () => TSetup
 
   private BASE_FOLDER_STUDIO = 'studio-html'
-    
+
+  /**
+   * The 'useStudio' is method used to wrapper to check the credentials for studio.
+   * @param    {object}   studio
+   * @property {function} studio.onCredentials
+   * @property {function} studio.onBucketCreated
+   * @returns  {this}
+   */
+  useStudio({
+    onCredentials,
+    onBucketCreated,
+    onLoadBucketCredentials,
+    onSetup
+  } : {
+    onCredentials   : (({ username, password }: { username: string; password: string }) => Promise<{ logged: boolean; buckets: string[] }>)
+    onBucketCreated ?: (({ token, secret, bucket }: { token: string; secret: string; bucket: string }) => Promise<void>),
+    onLoadBucketCredentials ?: (() => Promise<{ bucket : string , token : string , secret : string}[]>),
+    onSetup ?: () => TSetup
+  }): this {
+
+    this._onStudioCredentials = onCredentials
+    this._onStudioBucketCreated = onBucketCreated
+    this._onLoadBucketCredentials = onLoadBucketCredentials
+    this._onSetup = onSetup
+
+    // creating file meta for any buckets
+    this._utils.syncMetadata('*')
+    .catch(err => console.log(err))
+
+    return this;
+  }
+
+  /**
+   * The 'onMonitors' is method used to monitors the server.
+   * 
+   * @param    {function} callback
+   * @property {string} callback.host
+   * @property {object} callback.memory
+   * @property {object} callback.cpu
+   * @returns  {this}
+   */
+  onMonitors (callback : ({ host, memory , cpu } : { 
+    host : string | null 
+    memory : { 
+      total     : number // total
+      heapTotal : number // MB
+      heapUsed  : number // MB
+      rss       : number // MB
+      external  : number // MB
+    }  
+    cpu :  {
+      total : number // total
+      max   : number // %
+      min   : number // %
+      avg   : number // %
+      speed : number // GHz
+    }
+  }) => Promise<void>) : this {
+
+    this._monitors = callback
+
+    return this
+
+  } 
+
   protected studio = async ({  res , cookies } : TContext) => {
 
     const auth = cookies['auth.session']
@@ -24,7 +100,7 @@ export class NfsStudio extends NfsServerCore {
         minifyCSS: true,
         minifyJS: true
       })
-      return res.html(minifiedHtml);
+      return res.html(this._htmlFormatted(minifiedHtml));
     }
 
     const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, this.BASE_FOLDER_STUDIO,'index.html'), 'utf8')
@@ -36,7 +112,7 @@ export class NfsStudio extends NfsServerCore {
       minifyJS: true
     });
 
-    return res.html(minifiedHtml);
+    return res.html(this._htmlFormatted(minifiedHtml));
   }
 
   protected studioStorage = async ({  req , res } : TContext) => {
@@ -125,8 +201,12 @@ export class NfsStudio extends NfsServerCore {
         'ts' : 'typescript',
         'js' : 'javascript'
       }[extension] ?? extension
-     
-      return res.html(minifiedHtml.replace('{{language}}',language))
+
+
+      const formatted = minifiedHtml
+      .replace('{{language}}',language)
+
+      return res.html(res.html(this._htmlFormatted(formatted)))
     }
 
     const { stream , set } = await this._utils.makeStream({
@@ -414,7 +494,7 @@ export class NfsStudio extends NfsServerCore {
           })
 
           if(this._onStudioBucketCreated != null) {
-            const random  = () => [1,2,3].map(v => Math.random().toString(36).substring(3)).join('')
+            const random  = () => Array.from({ length: 5 }, (_,i) => i).map(v => Math.random().toString(36).substring(3)).join('')
             await this._onStudioBucketCreated({
               bucket : String(bucket),
               token : String(random()),
@@ -749,5 +829,24 @@ export class NfsStudio extends NfsServerCore {
         }
 
       }
-    }
+  }
+
+  private _htmlFormatted = ( html : string) => {
+    const setup = this._onSetup == null ? {} : this._onSetup()
+     return String(html)
+    .replace('{{name}}',setup?.name ?? 'NFS-Studio')
+    .replace('{{title}}',setup?.title ?? 'NFS-Studio')
+    .replace('{{subtitle}}',setup?.subtitle ?? '')
+    .replace('{{description}}',setup?.description ?? '')
+    .replace('{{logo.login}}',setup?.logo?.login ?? '') 
+    .replace('{{logo.fav}}',setup?.logo?.fav ?? '') 
+    .replace('{{logo.index}}',setup?.logo?.index ?? `
+      <svg class="w-12 h-12 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M15 4v3a1 1 0 0 1-1 1h-3m2 10v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7.13a1 1 0 0 1 .24-.65L6.7 8.35A1 1 0 0 1 7.46 8H9m-1 4H4m16-7v10a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V7.87a1 1 0 0 1 .24-.65l2.46-2.87a1 1 0 0 1 .76-.35H19a1 1 0 0 1 1 1Z"/>
+      </svg>
+    `) 
+  }
 }
+
+export { NfsStudio }
+export default NfsStudio

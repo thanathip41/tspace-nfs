@@ -24,15 +24,27 @@ import { NfsServer } from "tspace-nfs";
 new NfsServer()
 // localhost:8000/studio
 .useStudio({
+    onSetup: () => {
+      return {
+        logo: {
+            index:  `<img width="56" height="56" src="${base64}">`,
+            login : `<img class="mx-auto h-20 w-auto" src="${base64}">`,
+            fav : `<link rel="icon" type="image/x-icon" href="${favicon}">`
+        },
+        title : 'Media',
+        name : 'NFS-Stdio',
+        description: 'NFS-storage'
+      }
+    },
     onCredentials : async ({ username , password }) => {
 
       // The simple example, you can use any database or another to a wrapper check the credentials for studio.
       const credentials = [
-          {
-              buckets : ['*'],
-              username: 'root',
-              password: '',
-          }
+        {
+            buckets : ['*'],
+            username: 'root',
+            password: '',
+        }
       ]
   
       const find = credentials.find(v => v.username === username && v.password === password )
@@ -137,6 +149,7 @@ const nfs = new NfsClient({
     expired  : 60 * 60  // seconds default expired 1 hour
     exists   : true     // default exists false for check if the file exists
   }) 
+  // if using exists will return null if not exists file
   
   const base64 = await nfs.toBase64(fileDirectory)
 
