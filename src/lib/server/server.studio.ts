@@ -9,7 +9,6 @@ import { NfsServerCore } from './server.core'
 import type { 
   TCredentials, 
   TLoginCrentials, 
-  TMonitors, 
   TSetup 
 } from '../types'
 
@@ -18,10 +17,10 @@ class NfsStudio extends NfsServerCore {
   protected _onStudioBucketCreated    ?: ({ bucket , secret , token } : TCredentials) => Promise<void> | null
   protected _onStudioCredentials      ?: ({ username, password } : TLoginCrentials) => Promise<{ logged : boolean , buckets : string[] }> | null
   protected _onLoadBucketCredentials  ?: () => Promise<TCredentials[]>
-  protected _monitors                 ?: ({ host, memory , cpu } : TMonitors) => Promise<void>
-  protected _onSetup                    ?: () => TSetup
+  protected _onSetup                  ?: () => TSetup
 
   private BASE_FOLDER_STUDIO = 'studio-html'
+  private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30
 
   /**
    * The 'useStudio' is method used to wrapper to check the credentials for studio.
@@ -54,44 +53,13 @@ class NfsStudio extends NfsServerCore {
     return this;
   }
 
-  /**
-   * The 'onMonitors' is method used to monitors the server.
-   * 
-   * @param    {function} callback
-   * @property {string} callback.host
-   * @property {object} callback.memory
-   * @property {object} callback.cpu
-   * @returns  {this}
-   */
-  onMonitors (callback : ({ host, memory , cpu } : { 
-    host : string | null 
-    memory : { 
-      total     : number // total
-      heapTotal : number // MB
-      heapUsed  : number // MB
-      rss       : number // MB
-      external  : number // MB
-    }  
-    cpu :  {
-      total : number // total
-      max   : number // %
-      min   : number // %
-      avg   : number // %
-      speed : number // GHz
-    }
-  }) => Promise<void>) : this {
-
-    this._monitors = callback
-
-    return this
-
-  } 
-
-  protected studio = async ({  res , cookies } : TContext) => {
+  protected studio = async ({  req, res , cookies } : TContext) => {
 
     const auth = cookies['auth.session']
 
-    if(!auth || auth == null) {
+    const { success , data } = this._verifyToken(auth)
+
+    if(!auth || auth == null || !success) {
       const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, this.BASE_FOLDER_STUDIO,'login.html'), 'utf8')
 
       const minifiedHtml = await minify(html, {
@@ -100,6 +68,10 @@ class NfsStudio extends NfsServerCore {
         minifyCSS: true,
         minifyJS: true
       })
+
+      if(!success) {
+        res.setHeader('Set-Cookie', 'auth.session=; HttpOnly; Max-Age=0; Path=/studio');
+      }
       return res.html(this._htmlFormatted(minifiedHtml));
     }
 
@@ -112,7 +84,7 @@ class NfsStudio extends NfsServerCore {
       minifyJS: true
     });
 
-    return res.html(this._htmlFormatted(minifiedHtml));
+    return res.html(this._htmlFormatted(minifiedHtml,data.username));
   }
 
   protected studioStorage = async ({  req , res } : TContext) => {
@@ -155,7 +127,7 @@ class NfsStudio extends NfsServerCore {
 
   protected studioPreview = async ({  req, res , params } : TContext) => {
 
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(path).split('/');
 
@@ -224,7 +196,7 @@ class NfsStudio extends NfsServerCore {
 
   protected studioPreviewText = async ({  req, res , params } : TContext) => {
 
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(path).split('/');
 
@@ -266,7 +238,7 @@ class NfsStudio extends NfsServerCore {
       return res.badRequest('Please enter a content for rewrite file')
     }
     
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(path).split('/');
 
@@ -296,49 +268,89 @@ class NfsStudio extends NfsServerCore {
 
   }
 
-  protected studioLogin = async ({  res , body } : TContext) => {
+  protected studioLogin = async ({  res , body , cookies } : TContext) => {
+
+    const MAX_ATTEMPTS = 5;
+    const EXPIRED = 43_200;
+    const ATTEMPTS_EXPIRED = 60;
+    const JWT_SECRET = this._jwtSecret;
 
     if(this._onStudioCredentials == null) {
-      return res.badRequest('Please enable the studio')
+      return res.badRequest('Please enable the studio.');
     }
 
     const { username , password } = body
 
     if(!username) {
-      return res.badRequest('Please enter an username')
+      return res.badRequest('Please enter your username.');
+    }
+
+    const cookieAttempts = cookies['auth.attempts'];
+
+    const { success , data } = this._verifyToken(cookieAttempts);
+    let count = success && username === data?.username 
+      ? (data?.count ?? 0) 
+      : 0
+
+    if (count >= MAX_ATTEMPTS) {
+      const start = +data?.timestamp;
+      const end = +new Date();
+
+      const diffInSeconds = Math.floor((end - start) / 1000);
+      
+      return res
+      .status(429)
+      .json({ message : `Too many login attempts. Please try again later in ${ATTEMPTS_EXPIRED - diffInSeconds}s.` });
     }
 
     const check = await this._onStudioCredentials({ username : String(username), password : String(password) })
     
-    if(!check?.logged)   return res.unauthorized('Please check your username and password')
+    if(!check?.logged) {
+      count = count + 1
+      const attempts = jwt.sign({
+        data : {
+          issuer : 'nfs-studio',
+          sub : {
+            username,
+            count,
+            timestamp : +new Date()
+          }
+        }
+      }, JWT_SECRET , { 
+        expiresIn : ATTEMPTS_EXPIRED , 
+        algorithm : 'HS256'
+      })
+
+      res.setHeader('Set-Cookie', `auth.attempts=${attempts}; HttpOnly; Path=/; Max-Age=60`);
+      return res.unauthorized(`Authentication failed (${count}). Please check your credentials.`)
+    }
     
-    const EXPIRED = 43_200
+    
     const session = jwt.sign({
       data : {
         issuer : 'nfs-studio',
         sub : {
+          username,
           buckets : check?.buckets ?? [],
           permissions : ['*'],
           token  : Buffer.from(`${+new Date()}`).toString('base64')
         }
       }
-    }, this._jwtSecret , { 
+    }, JWT_SECRET , { 
       expiresIn : EXPIRED , 
       algorithm : 'HS256'
     })
   
-    res.setHeader('Set-Cookie', 
-      `auth.session=${session}; HttpOnly; Max-Age=${EXPIRED}; Path=/studio`
-    )
-    
+    res.setHeader('Set-Cookie',`auth.session=${session}; HttpOnly; Max-Age=${EXPIRED}; Path=/studio`)
+ 
     return res.ok()
   }
 
   protected studioLogout = async ({  res } : TContext) => {
 
-    res.setHeader('Set-Cookie', 
-      `auth.session=; HttpOnly; Max-Age=0; Path=/studio`
-    )
+    res.setHeader('Set-Cookie', [
+      'auth.session=; HttpOnly; Max-Age=0; Path=/studio'
+    ]);
 
     return res.ok()
   }
@@ -568,7 +580,7 @@ class NfsStudio extends NfsServerCore {
    
     const rootFolder = this._rootFolder
 
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
 
     const [bucket] = String(path).split('/')
 
@@ -608,7 +620,7 @@ class NfsStudio extends NfsServerCore {
 
   protected studioEdit = async ({ req, res , params , body } : TContext) => {
    
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(path).split('/');
 
@@ -652,7 +664,7 @@ class NfsStudio extends NfsServerCore {
 
   protected studioRemove = async ({ req, res , body , params } : TContext) => {
    
-    const data = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const data = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(data).split('/');
 
@@ -698,7 +710,7 @@ class NfsStudio extends NfsServerCore {
 
   protected studioGetPathShared = async ({  req, res , params } : TContext) => {
 
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(path).split('/');
 
@@ -728,7 +740,7 @@ class NfsStudio extends NfsServerCore {
         }
       }
     }, this._jwtSecret , { 
-      expiresIn : 60 * 60 * 24 * 30, 
+      expiresIn : this.FILE_SHARE_EXPIRED, 
       algorithm : 'HS256'
     })
 
@@ -739,7 +751,7 @@ class NfsStudio extends NfsServerCore {
 
   protected studioShared = async ({  req, res , params , query } : TContext) => {
 
-    const path = String(params['*']).replace(/^\/+/, '').replace(/\.{2}(?!\.)/g, "")
+    const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
     const [bucket, ...rest] = String(path).split('/');
 
@@ -765,7 +777,7 @@ class NfsStudio extends NfsServerCore {
       filePath = this._utils.normalizeFolder(String(filePath))
     }
 
-    const { success, data } = this._verifyShared(token)
+    const { success, data } = this._verifyToken(token)
 
     if(!success || data.name !== filePath) {
       res.writeHead(400 , { 'Content-Type': 'text/xml'})
@@ -800,7 +812,7 @@ class NfsStudio extends NfsServerCore {
 
   }
 
-  private _verifyShared (token : string) {
+  private _verifyToken (token : string) {
   
       try {
        
@@ -831,9 +843,10 @@ class NfsStudio extends NfsServerCore {
       }
   }
 
-  private _htmlFormatted = ( html : string) => {
+  private _htmlFormatted = ( html : string,username ?: string | null) => {
     const setup = this._onSetup == null ? {} : this._onSetup()
-     return String(html)
+    return String(html)
+    .replace('{{auth.username}}',username == null || username === '' ? 'N' : username.charAt(0).toUpperCase())
     .replace('{{name}}',setup?.name ?? 'NFS-Studio')
     .replace('{{title}}',setup?.title ?? 'NFS-Studio')
     .replace('{{subtitle}}',setup?.subtitle ?? '')

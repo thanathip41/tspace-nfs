@@ -61,25 +61,27 @@
                 >
             </div>
             <div>
-            <button type="submit" class="w-full py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">
+            <button type="submit" class="w-full py-2 text-white rounded-md dark:bg-gray-900">
                Sign in
             </button>
             </div>
-            <div id="errorMessage" class="text-red-500 text-sm hidden">Invalid username or password. Please try again.</div>
+            <div id="errorMessage" class="text-red-500 text-sm hidden"></div>
         </form>
         </div>
     </div>
 </body>
 <script>
-    const $query = (element) => document.querySelector(element)
-    const loading = $query('#loading')
+    const $query = (element) => document.querySelector(element);
+    const loading = $query('#loading');
     const loginForm = $query('#loginForm');
     const errorMessage = $query('#errorMessage');
-    const url = `${window.location.protocol}//${window.location.host}`
+    const url = `${window.location.protocol}//${window.location.host}`;
+    let timer = null;
 
     loginForm.addEventListener('submit', async (event) => {
 
         event.preventDefault();
+        clearInterval(timer);
         
         const username = $query('#username').value;
         const password = $query('#password').value;
@@ -105,15 +107,36 @@
                 return
             }
 
+            const error = await response.json();
+
+            throw new Error(error.message || 'Network response was not ok');
+
+        } catch (err) {
             await new Promise(r => setTimeout(r, 500));
             loading.style.display = 'none';
+
+            errorMessage.textContent = err.message;
             errorMessage.classList.remove('hidden');
 
-        } catch (error) {
+            const match = errorMessage.textContent.match(/(\d+)s/);
            
-            errorMessage.textContent = 'An error occurred. Please try again later.';
-            errorMessage.classList.remove('hidden');
-            loading.style.display = 'flex';
+            if(match != null) {
+                let secondsLeft = match ? parseInt(match[1]) : 0;
+                 const submitButton = loginForm.querySelector('button[type="submit"]');
+
+                timer = setInterval(() => {
+                    secondsLeft--;
+                    if (secondsLeft > 0) {
+                        errorMessage.textContent = `Too many login attempts. Please try again later in ${secondsLeft}s.`;
+                        if (submitButton) submitButton.disabled = true;
+                        return
+                    } 
+
+                    clearInterval(timer);
+                    if (submitButton) submitButton.disabled = false;
+                    errorMessage.classList.add('hidden');
+                }, 1000);
+            }
         }
     })
 </script>

@@ -40,17 +40,19 @@ class NfsClient {
     private _authorization              = ''
     private _url                        = 'http://localhost:8000'
     private _fileExpired                =  60 * 60
-    private _ENDPOINT_CONNECT           = 'connect'
-    private _ENDPOINT_HEALTH_CHECK      = 'health-check'
-    private _ENDPOINT_REMOVE            = 'remove'
-    private _ENDPOINT_FILE              = 'file'
-    private _ENDPOINT_FILE_BASE64       = 'base64'
-    private _ENDPOINT_FILE_STREAM       = 'stream'
-    private _ENDPOINT_STORAGE           = 'storage'
-    private _ENDPOINT_FOLDERS           = 'folders'
-    private _ENDPOINT_UPLOAD            = 'upload'
-    private _ENDPOINT_MERGE             = 'upload/merge'
-    private _ENDPOINT_UPLOAD_BASE64     = 'upload/base64'
+    private API_ENDPOINT_CONNECT        = 'connect'
+    private API_ENDPOINT_HEALTH_CHECK   = 'health-check'
+    private API_ENDPOINT_REMOVE         = 'remove'
+    private API_ENDPOINT_FILE           = 'file'
+    private API_ENDPOINT_FILE_BASE64    = 'base64'
+    private API_ENDPOINT_FILE_STREAM    = 'stream'
+    private API_ENDPOINT_STORAGE        = 'storage'
+    private API_ENDPOINT_FOLDERS        = 'folders'
+    private API_ENDPOINT_UPLOAD         = 'upload'
+    private API_ENDPOINT_MERGE          = 'upload/merge'
+    private API_ENDPOINT_UPLOAD_BASE64  = 'upload/base64'
+    private API_ENDPOINT_UPLOAD_STREAM  = 'upload/stream'
+    private API_ENDPOINT_META           = 'meta'
     private _TOKEN_EXPIRED_MESSAGE      = 'Token has expired'
    
     private _credentials = {
@@ -125,6 +127,42 @@ class NfsClient {
     }
 
     /**
+     * The 'getMeta' method is used get meta of file
+     * 
+     * @param    {string}   path 
+     * @returns  {promise<string>} 
+     */
+    async toMeta (path : string) : Promise<{
+        isDirectory : boolean;
+        size        : number;
+        createdAt   : Date;
+        modifiedAt  : Date;
+        extension   : string;
+        contenType  : string;
+    }> {
+
+        try {
+
+            path = `${path}`.replace(/^\/+/, '')
+
+            const url = this._URL(this.API_ENDPOINT_META)
+
+            return await this._fetch({
+                url,
+                data : { 
+                    path : this._normalizeDefaultDirectory(path)
+                }
+            })
+
+        } catch (err) {
+
+            return await this._retryConnect(err, async () => {
+                return await this.toMeta(path)
+            })
+        }
+    }
+
+    /**
      * The 'toURL' method is used to converts a given file path to a URL
      * 
      * @param    {string}   path 
@@ -142,7 +180,7 @@ class NfsClient {
 
             if(exists != null && exists) {
 
-                const url = this._URL(this._ENDPOINT_FILE)
+                const url = this._URL(this.API_ENDPOINT_FILE)
 
                 const response = await this._fetch({
                     url,
@@ -153,7 +191,7 @@ class NfsClient {
                     }
                 })
                 
-                return `${this._url}/${response.data?.endpoint}`
+                return `${this._url}/${response?.endpoint}`
             }
 
             const { token , bucket } = this._credentials
@@ -191,7 +229,7 @@ class NfsClient {
 
         try {
 
-            const url = this._URL(this._ENDPOINT_FILE_BASE64)
+            const url = this._URL(this.API_ENDPOINT_FILE_BASE64)
  
             const response = await this._fetch({
                 url,
@@ -200,7 +238,7 @@ class NfsClient {
                 }
             })
 
-            return response.data?.base64 ?? ''
+            return response.base64 ?? ''
 
         } catch (err) {
             return await this._retryConnect(err, async () => {
@@ -219,7 +257,7 @@ class NfsClient {
     async toStream (path : string , range?: string) : Promise<Readable> {
         try {
 
-            const url = this._URL(this._ENDPOINT_FILE_STREAM)
+            const url = this._URL(this.API_ENDPOINT_FILE_STREAM)
  
             const response = await this._fetch({
                 url,
@@ -230,7 +268,7 @@ class NfsClient {
                 type : 'stream'
             })
 
-            return response.data
+            return response
 
         } catch (err) {
 
@@ -241,24 +279,61 @@ class NfsClient {
     }
 
     /**
+     * The 'save' method is used uploading file
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.file // path to file or base64 and using type = base64
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @property {string?} obj.extension
+     * @property {number?} obj.chunkSize // unit mb  by default 200 mb
+     * @property {string?} obj.type // stream | base64 | form-data default = form-data
+     * @returns  {Promise<{size : number , path : string , name : string , url : string}>} 
+     */
+    async save ({ file , name , extension , folder , chunkSize, type } : {
+        file      :  string;
+        name      :  string;
+        extension ?: string;
+        folder    ?: string;
+        chunkSize ?: number;
+        type      ?: 'stream' | 'form-data'
+    }) : Promise<{ size : number , path : string , name : string , url : string }> {
+        return await this.upload({ file , name , extension , folder , chunkSize , type })
+    }
+
+
+    /**
      * The 'upload' method is used uploading file
      * 
      * @param    {object}  obj
-     * @property {string}  obj.file
+     * @property {string}  obj.file // path to file or base64 and using type = base64
      * @property {string}  obj.name
      * @property {string?} obj.folder
+     * @property {string?} obj.extension
      * @property {number?} obj.chunkSize // unit mb  by default 200 mb
+     * @property {string?} obj.type // stream | base64 | form-data default = form-data
      * @returns  {Promise<{size : number , path : string , name : string , url : string}>} // size is bytes
      */
-    async upload ({ file , name , extension , folder , chunkSize } : {
-        file      :  string,
-        name      :  string,
-        extension ?: string
-        folder    ?: string
-        chunkSize ?: number
+    async upload ({ file , name , extension , folder , chunkSize, type } : {
+        file      :  string;
+        name      :  string;
+        extension ?: string;
+        folder    ?: string;
+        chunkSize ?: number;
+        type      ?: 'stream' | 'form-data'
     }) : Promise<{ size : number , path : string , name : string , url : string }> {
 
         await this._healthCheck()
+
+        if(type === 'stream') {
+            return await this.uploadStream({
+                file,
+                name,
+                extension,
+                folder,
+                chunkSize
+            })
+        }
 
         const CHUNK_SIZE = 1024 * 1024 * (chunkSize == null ? 200 : chunkSize)
         const stats = fsSystem.statSync(file)
@@ -277,17 +352,15 @@ class NfsClient {
 
             partNumber++
 
-            const fileId = Math.random().toString(36).substring(2, 12).replace(/[.@]/g, '')
-
             const form = new FormData()
 
-            const fileName = `${name.split('.')[0]}_${fileId}@${`0${partNumber}`.slice(-2)}`
+            const fileName = `${name.split('.')[0]}.part-${`0${partNumber}`.slice(-2)}`
 
             form.append('file', chunk, fileName)
 
             form.append('folder', this._normalizeDefaultDirectory(folder))
 
-            const url = this._URL(this._ENDPOINT_UPLOAD)
+            const url = this._URL(this.API_ENDPOINT_UPLOAD)
 
             const response = await this._fetch({
                 url,
@@ -317,7 +390,7 @@ class NfsClient {
         try {
 
             const response = await this._fetch({
-                url : this._URL(this._ENDPOINT_MERGE),
+                url : this._URL(this.API_ENDPOINT_MERGE),
                 data : {
                     folder : this._normalizeDefaultDirectory(folder),
                     name : this._normalizeFilename({ name , extension }),
@@ -326,17 +399,15 @@ class NfsClient {
                 }
             })
     
-            const normalizedPath = String(response.data?.path)
+            const normalizedPath = String(response?.path)
             .replace(this._directory,'')
             .replace(/^\/+/, '')
 
-            const data = response.data
-
             return {
-                name : data.name,
+                name : response?.name,
                 url : await this.toURL(normalizedPath),
                 path : normalizedPath,
-                size : data.size
+                size : response?.size
             }
 
         } catch (err) {
@@ -359,26 +430,6 @@ class NfsClient {
     }
 
     /**
-     * The 'save' method is used uploading file
-     * 
-     * @param    {object}  obj
-     * @property {string}  obj.file
-     * @property {string}  obj.name
-     * @property {string?} obj.folder
-     * @property {number?} obj.chunkSize // unit mb  by default 200 mb
-     * @returns  {Promise<{size : number , path : string , name : string , url : string}>} 
-     */
-    async save ({ file , name , extension , folder , chunkSize } : {
-        file      :  string,
-        name      :  string,
-        extension ?: string
-        folder    ?: string
-        chunkSize ?: number
-    }) : Promise<{ size : number , path : string , name : string , url : string }> {
-        return await this.upload({ file , name , extension , folder , chunkSize })
-    }
-
-    /**
      * The 'uploadBase64' method is used uploading file with base64 encoded
      * 
      * @param    {object}  obj
@@ -387,16 +438,16 @@ class NfsClient {
      * @property {string?} obj.folder
      * @returns   {promise<{size : number , path : string , name : string}>} 
      */
-      async uploadBase64 ({ base64 , name , extension , folder } : {
+    async uploadBase64 ({ base64 , name , extension , folder } : {
         base64    : string,
         name      : string,
         extension ?: string
         folder    ?: string
-    }) : Promise<{ size : number , path : string , name : string}> {
+    }) : Promise<{ size : number , path : string , name : string, url: string}> {
 
         try {
 
-            const url = this._URL(this._ENDPOINT_UPLOAD_BASE64)
+            const url = this._URL(this.API_ENDPOINT_UPLOAD_BASE64)
 
             const response = await this._fetch({
                 url,
@@ -408,8 +459,8 @@ class NfsClient {
             })
 
             return {
-                url : await this.toURL(response.data?.path),
-                ...response.data,
+                url : await this.toURL(response?.path),
+                ...response,
             }
 
         } catch (err) {
@@ -422,6 +473,97 @@ class NfsClient {
                     extension
                 })
             })
+        }
+    }
+
+     /**
+     * The 'uploadStream' method is used uploading file with stream binary
+     * 
+     * @param    {object}  obj
+     * @property {string}  obj.base64
+     * @property {string}  obj.name
+     * @property {string?} obj.folder
+     * @returns   {promise<{size : number , path : string , name : string}>} 
+     */
+    async uploadStream ({ file , name , extension , folder , chunkSize } : {
+        file      :  string,
+        name      :  string,
+        extension ?: string
+        folder    ?: string
+        chunkSize ?: number
+    }) : Promise<{ size : number , path : string , name : string , url : string }> {
+
+        await this._healthCheck()
+
+        const CHUNK_SIZE = 1024 * 1024 * (chunkSize == null ? 100 : chunkSize)
+        const stats = fsSystem.statSync(file)
+        const fileSize = stats.size
+        const totalParts = Math.ceil(fileSize / CHUNK_SIZE)
+        const files : string[] = []
+        const promises: Function[] = [];
+
+        for (let index = 0; index < totalParts; index++) {
+
+            const fileName = `${name.split('.')[0]}.part-${`0${index+1}`.slice(-2)}`
+
+            const start = index * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, fileSize) - 1;
+            const chunkSize = end - start + 1;
+
+            const stream = fsSystem.createReadStream(file, { start, end });
+
+            const url = this._URL(this.API_ENDPOINT_UPLOAD_STREAM)
+          
+            const promise = async () => {
+                return await this._fetch({
+                    url,
+                    data : stream,
+                    type : 'stream',
+                    headers: {
+                        'Content-Length': chunkSize,
+                        'X-File-Name': fileName,
+                        'X-Folder-Name': folder,
+                        'X-Chunk-Index': index.toString(),
+                        'X-Total-Chunks': totalParts.toString(),
+                    }
+                })
+                .then(_ => files.push(fileName))
+            }
+
+            promises.push(promise);
+        }
+
+        await Promise.all(promises.map(v => v()))
+        .catch(async () => {
+             for(const file of files) {
+                const path = folder == null 
+                ? file
+                : `${folder}/${file}`
+                await this.delete(this._normalizeDefaultDirectory(path)).catch(_ => null)
+            }
+
+            throw new Error('Could not upload files. Please verify your file and try again.')
+        })
+
+        const data  = await this._fetch({
+            url : this._URL(this.API_ENDPOINT_MERGE),
+            data : {
+                folder : this._normalizeDefaultDirectory(folder),
+                name : this._normalizeFilename({ name , extension }),
+                paths : files,
+                totalSize : fileSize
+            }
+        })
+
+        const normalizedPath = String(data?.path)
+        .replace(this._directory,'')
+        .replace(/^\/+/, '')
+
+        return {
+            name : data.name,
+            url : await this.toURL(normalizedPath),
+            path : normalizedPath,
+            size : data.size
         }
     }
 
@@ -453,7 +595,7 @@ class NfsClient {
 
         try {
 
-            const url = this._URL(this._ENDPOINT_REMOVE)
+            const url = this._URL(this.API_ENDPOINT_REMOVE)
 
             await this._fetch({
                 url,
@@ -492,7 +634,7 @@ class NfsClient {
 
        try {
 
-        const url = this._URL(this._ENDPOINT_STORAGE)
+        const url = this._URL(this.API_ENDPOINT_STORAGE)
 
         const response = await this._fetch({
             url,
@@ -501,7 +643,7 @@ class NfsClient {
             }
         })
 
-        return response.data?.storage ?? []
+        return response.storage ?? []
 
        } catch (err) {
             return await this._retryConnect(err, async () => {
@@ -519,14 +661,14 @@ class NfsClient {
 
         try {
  
-            const url = this._URL(this._ENDPOINT_FOLDERS)
+            const url = this._URL(this.API_ENDPOINT_FOLDERS)
     
             const response = await this._fetch({
                 url,
                 data : {}
             })
     
-            return response.data?.folders ?? []
+            return response?.folders ?? []
  
         } catch (err) {
             return await this._retryConnect(err, async () => {
@@ -534,25 +676,34 @@ class NfsClient {
             })
         }
     }
-
-    private async _fetch ({ url , data , type = 'json' , method } : { 
+    private async _fetch ({ url , data , type = 'json' , method, headers } : { 
         url : string , 
         data : any, 
         type ?: 'form-data' | 'stream' | 'json'
-        method ?: string 
+        method ?: string;
+        headers?:Record<string,any>
     }) : Promise<any> {
 
         try {
 
-            let headers = {
-                authorization : `Bearer ${this._authorization}`,
-                Connection: 'keep-alive'
-            }
+            headers = {
+                'Authorization': `Bearer ${this._authorization}`,
+                'Connection': 'keep-alive',
+                ...headers
+            };
+
     
             if(type === 'form-data') {
                 headers = {
                     ...headers,
                     ...data.getHeaders()
+                }
+            }
+
+            if (type === 'stream') {
+                 headers = {
+                    ...headers,
+                    'Content-Type' : 'application/octet-stream'
                 }
             }
     
@@ -581,7 +732,9 @@ class NfsClient {
                 responseType : type
             }
 
-            return await axios(configs)
+            const { data : response } =  await axios(configs)
+
+            return response
 
         } catch (err : any) {
 
@@ -592,6 +745,7 @@ class NfsClient {
                     url , 
                     data , 
                     type , 
+                    headers,
                     error : err , 
                     method,
                     retry : 1
@@ -602,11 +756,12 @@ class NfsClient {
         }
     }
 
-    private async _fetchReTry ({ url , data , type = 'json' , method , error , retry = 1 } : { 
+    private async _fetchReTry ({ url , data , type = 'json', headers , method , error , retry = 1 } : { 
         url : string , 
         data : any, 
         type ?: 'form-data' | 'stream' | 'json'
-        method ?: string 
+        method ?: string
+        headers?:Record<string,any>
         error : Error
         retry ?: number
     }) : Promise<any> {
@@ -619,15 +774,24 @@ class NfsClient {
 
             await new Promise(ok => setTimeout(ok, (retry**2) * 1_500))
             
-            let headers = {
-                authorization : `Bearer ${this._authorization}`,
-                Connection: 'keep-alive'
-            }
+            headers = {
+                'Authorization': `Bearer ${this._authorization}`,
+                'Connection': 'keep-alive',
+                ...headers
+            };
+
     
             if(type === 'form-data') {
                 headers = {
                     ...headers,
                     ...data.getHeaders()
+                }
+            }
+
+            if (type === 'stream') {
+                 headers = {
+                    ...headers,
+                    'Content-Type' : 'application/octet-stream'
                 }
             }
     
@@ -665,6 +829,7 @@ class NfsClient {
                     url,
                     data,
                     type,
+                    headers,
                     method,
                     error,
                     retry : retry + 1
@@ -690,7 +855,11 @@ class NfsClient {
     }
 
     private _URL (endpoint : string) : string {
-        return `${this._url}/api/${endpoint}`
+        const normalizeURL = this._url.replace(/\/+$/, '');
+        endpoint = endpoint.replace(/^\/?api\/?/, '');
+        endpoint = endpoint.replace(/^\/+|\/+$/g, '');
+
+        return `${normalizeURL}/api/${endpoint}`;
     }
 
     private _getConnect({
@@ -699,7 +868,7 @@ class NfsClient {
         bucket
     } : { token : string; secret : string; bucket : string}) : void {
 
-        const url = this._URL(this._ENDPOINT_CONNECT)
+        const url = this._URL(this.API_ENDPOINT_CONNECT)
 
         axios.post(url, { 
             token,
@@ -730,8 +899,8 @@ class NfsClient {
     private async _healthCheck () {
         try {
 
-            const { data } = await this._fetch({
-                url : this._URL(this._ENDPOINT_HEALTH_CHECK),
+            const data  = await this._fetch({
+                url : this._URL(this.API_ENDPOINT_HEALTH_CHECK),
                 data : {},
                 method : 'POST'
             })
@@ -757,7 +926,7 @@ class NfsClient {
     private async _connection() {
 
         const response = await axios({
-            url : this._URL(this._ENDPOINT_CONNECT),
+            url : this._URL(this.API_ENDPOINT_CONNECT),
             data : { 
                 ...this._credentials
             },

@@ -37,7 +37,7 @@
 </head>
 <body class="bg-gray-300 dark:bg-gray-900">
   
-  <nav class="sticky top-0 bg-gray-300 border-gray-200 dark:bg-gray-900">
+  <nav class="sticky top-0 bg-gray-300 border-gray-200 dark:bg-gray-900 z-[40]">
     <div class="w-screen-xl flex items-center justify-between mx-auto p-4">
     
       <div class="cursor-pointer flex items-center space-x-3 rtl:space-x-reverse" onclick="window.location.reload()">
@@ -47,35 +47,50 @@
         </h1>
       </div>
 
-      <div class="flex space-x-3 rtl:space-x-reverse">
-          <button id="themeToggle" type="button" 
-            class="rounded-lg text-sm px-4 py-2 text-center bg-gray-100 dark:bg-gray-800"
-          >
-            <svg id="toggleIcon" class="w-4 h-4 xl:w-6 xl:h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-              <path fill-rule="evenodd" d="M11.675 2.015a.998.998 0 0 0-.403.011C6.09 2.4 2 6.722 2 12c0 5.523 4.477 10 10 10 4.356 0 8.058-2.784 9.43-6.667a1 1 0 0 0-1.02-1.33c-.08.006-.105.005-.127.005h-.001l-.028-.002A5.227 5.227 0 0 0 20 14a8 8 0 0 1-8-8c0-.952.121-1.752.404-2.558a.996.996 0 0 0 .096-.428V3a1 1 0 0 0-.825-.985Z" clip-rule="evenodd"/>
-            </svg>
-          </button>
-          <button id="logout" class="text-gray-800 dark:text-white rounded-lg text-sm px-4 py-2 text-center text-lg bg-gray-100 dark:bg-gray-800 ml-3"> 
-            <svg class="w-4 h-4 xl:w-6 xl:h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H8m12 0-4 4m4-4-4-4M9 4H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h2"/>
-            </svg>            
-          </button>
+      <div class="flex items-center space-x-3 rtl:space-x-reverse">
+        <button id="themeToggle" type="button" 
+          class="rounded-lg text-sm px-4 py-2 text-center"
+        >
+          <svg id="toggleIcon" class="w-5 h-5 xl:w-6 xl:h-6 text-gray-800 dark:text-white" fill="currentColor" viewBox="0 0 24 24">
+           <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5V3m0 18v-2M7.05 7.05 5.636 5.636m12.728 12.728L16.95 16.95M5 12H3m18 0h-2M7.05 16.95l-1.414 1.414M18.364 5.636 16.95 7.05M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/>
+          </svg>
+
+        </button>
+
+      <div class="relative">
+        <button onclick="toggleDropdown()" class="focus:outline-none bg-gray-100 dark:bg-gray-800  rounded-full  ">
+          <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl select-none
+                text-black dark:text-white dark:bg-gray-700"
+            >
+            {{auth.username}}
+          </div>
+
+        </button>
+
+        <div id="dropdownMenu" class="absolute right-0 mt-2 w-40 bg-white rounded shadow-lg z-50 hidden dark:bg-gray-800">
+          <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Profile</a>
+          <a href="#" id="logout" class="flex items-center gap-1 px-2 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <b> Sign out </b>
+          </a>
+        </div>
       </div>
 
+      </div>
     </div>
   </nav>
+
 
   <div id="notify-container" class="space-y-4 fixed right-0 top-0 m-2 items-end justify-end z-50 pointer-events-none"></div>
 
   <div class="h-[100vh]">
 
-    <div class="grid grid-cols-12 h-[75vh] overflow-y-auto">
+    <div class="grid grid-cols-12 h-[80vh] overflow-y-auto">
     
       <div class="col-span-5 xl:col-span-3 bg-white dark:bg-gray-800 shadow-md border-r p-4">
         <div class="border-b mb-3">
           <div class="flex items-center justify-between w-full text-left ">
             <h1 class="text-3xl mb-2 dark:text-gray-200">Buckets</h1>
-            <svg id="bucketCreate" class="w-8 h-8 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+            <svg id="bucketCreate" class="w-8 h-8 text-gray-800 dark:text-white cursor-pointer" width="24" height="24" fill="none" viewBox="0 0 24 24">
               <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-7 7V5"/>
             </svg>
           </div>
@@ -95,7 +110,7 @@
             <div class="flex flex-wrap items-center justify-between p-4 gap-4">
           
               <div class="flex items-center space-x-3 flex-wrap sm:flex-nowrap">
-                <svg onclick="onReload(event)" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <svg onclick="onReload(event)" class="w-6 h-6 text-gray-800 dark:text-white cursor-pointer" width="24" height="24" fill="none" viewBox="0 0 24 24">
                   <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
                 </svg>
                 <span class="font-semibold text-gray-800 dark:text-gray-200">Current Directory:</span>
@@ -119,11 +134,12 @@
                     <path fill-rule="evenodd" d="M13 11.15V4a1 1 0 1 0-2 0v7.15L8.78 8.374a1 1 0 1 0-1.56 1.25l4 5a1 1 0 0 0 1.56 0l4-5a1 1 0 1 0-1.56-1.25L13 11.15Z" clip-rule="evenodd"/>
                     <path fill-rule="evenodd" d="M9.657 15.874 7.358 13H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2.358l-2.3 2.874a3 3 0 0 1-4.685 0ZM17 16a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H17Z" clip-rule="evenodd"/>
                   </svg>
-                   <span id="download-count" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[12px] rounded-full px-1 py-[1px] leading-none">0</span>
-                  
+                  <span id="download-count" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[12px] rounded-full px-1 py-[1px] leading-none">
+                    0
+                  </span>
                 </div>
 
-                <svg  id="delete"  class="cursor-pointer red-500 w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <svg  id="delete"  class="cursor-pointer red-500 w-6 h-6 text-gray-800 dark:text-white" width="24" height="24" fill="none" viewBox="0 0 24 24">
                   <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 7h14m-9 3v8m4-8v8M10 3h4a1 1 0 0 1 1 1v3H9V4a1 1 0 0 1 1-1ZM6 7h12v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7Z"/>
                 </svg>
 
@@ -190,7 +206,7 @@
       </div>
     </div>
   
-    <div class="grid grid-cols-1 w-full h-[50vh] overflow-y-auto border-t">
+    <div class="grid grid-cols-1 w-full h-[40vh] overflow-y-auto border-t">
       <div class="mt-2">
         <table class="table-auto">
           <thead>
@@ -396,13 +412,13 @@
       <td class="px-4 py-2">${new Date().toLocaleDateString()}</td>
       <td class="flex gap-3 px-4 py-2">
           <svg target="${$state.data.path.selected}/${folderName}" onclick="onEdit(event)"} 
-            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
             <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
           </svg>
 
           <svg target="${$state.data.path.selected}/${folderName}" onclick="onRemove(event)" } 
-            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
           </svg>
       </td>
@@ -411,6 +427,18 @@
     $state.el.fileTableBody.appendChild(row);
     themeToggleMode()
   };
+
+  function covertDate (str = null) {
+    const date = str ? new Date(str) : new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
 
   function addFileToTable(file , checkFile = 0) {
 
@@ -435,7 +463,7 @@
             ? `
             <label class="flex cursor-pointer">
               <input type="checkbox" class="filesSelected hidden peer" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
-              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" width="24" height="24" fill="none" viewBox="0 0 24 24">
                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 8H4m0-2v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"/>
               </svg>
               <div class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" target="${file.path}" value="${file.name}" 
@@ -448,7 +476,7 @@
             : `
             <label class="flex cursor-pointer">
               <input type="checkbox" class="filesSelected hidden peer"  value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
-              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" width="24" height="24" fill="none" viewBox="0 0 24 24">
                 <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M10 3v4a1 1 0 0 1-1 1H5m14-4v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7.914a1 1 0 0 1 .293-.707l3.914-3.914A1 1 0 0 1 9.914 3H18a1 1 0 0 1 1 1Z"/>
               </svg>
               <div class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" target="${file.path}" value="${file.name}" 4
@@ -463,11 +491,11 @@
       </td>
       <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
       <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension === '' || file.extension == null ? 'file' : file.extension}</td>
-      <td class="px-4 py-2">${new Date(file.lastModified).toJSON()}</td>
+      <td class="px-4 py-2">${covertDate(file.lastModified)}</td>
       <td class="flex gap-3 px-4 py-2">
          
           <svg target="${file.path}" onclick="${file.isFolder ? 'onLoadFile(event)' : 'onPreview(event)'}"} 
-            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
           </svg>
 
@@ -475,26 +503,26 @@
           ${file.isFolder
           ?`
             <svg target="${file.path}"
-              class="cursor-not-allowed hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              class="cursor-not-allowed hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
               <path d="M17.5 3a3.5 3.5 0 0 0-3.456 4.06L8.143 9.704a3.5 3.5 0 1 0-.01 4.6l5.91 2.65a3.5 3.5 0 1 0 .863-1.805l-5.94-2.662a3.53 3.53 0 0 0 .002-.961l5.948-2.667A3.5 3.5 0 1 0 17.5 3Z"/>
             </svg>
             `
             :`
             <svg target="${file.path}" onclick="onShared(event)"
-              class="cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              class="cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
               <path d="M17.5 3a3.5 3.5 0 0 0-3.456 4.06L8.143 9.704a3.5 3.5 0 1 0-.01 4.6l5.91 2.65a3.5 3.5 0 1 0 .863-1.805l-5.94-2.662a3.53 3.53 0 0 0 .002-.961l5.948-2.667A3.5 3.5 0 1 0 17.5 3Z"/>
             </svg>
             `
           }
           
           <svg target="${file.path}" onclick="onEdit(event)"} 
-            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
             <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
           </svg>
 
           <svg target="${file.path}" onclick="onRemove(event)" } 
-            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
           </svg>
       </td>
@@ -552,7 +580,7 @@
       </td>
       <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
       <td class="px-4 py-2">${file.extension}</td>
-      <td class="px-4 py-2">${new Date(file.lastModified).toJSON()}</td>
+      <td class="px-4 py-2">${covertDate(file.lastModified)}</td>
       <td class="px-4 py-2"> <progress value="${progress}" max="100"></progress> ${progress}% </td>
       <td class="px-4 py-2"> ${formatSize(uploadSpeed)}/s </td>
     `;
@@ -647,7 +675,7 @@
                     name: file.name,
                     size: file.size,
                     extension: String(file.name)?.split('.').pop(),
-                    lastModified: new Date().toJSON(),
+                    lastModified: covertDate(),
                     directory: path.replace(`/${file.name}`, ''),
                     path : [path , file.name].join('/')
                   },
@@ -937,7 +965,7 @@
               <div class="grid grid-cols-12"> 
                 <div class="col-span-2 xl:col-span-1"> 
                   <button class="credentials">
-                  <svg class="w-4 h-4 xl:w-6 xl:h-6 mr-2 cursor-copy text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <svg class="w-4 h-4 xl:w-6 xl:h-6 mr-2 cursor-copy text-gray-800 dark:text-white" width="24" height="24" fill="none" viewBox="0 0 24 24">
                       <path fill="currentColor" d="M6.94318 11h-.85227l.96023-2.90909h1.07954L9.09091 11h-.85227l-.63637-2.10795h-.02272L6.94318 11Zm-.15909-1.14773h1.60227v.59093H6.78409v-.59093ZM9.37109 11V8.09091h1.25571c.2159 0 .4048.04261.5667.12784.162.08523.2879.20502.3779.35937.0899.15436.1349.33476.1349.5412 0 .20833-.0464.38873-.1392.54119-.0918.15246-.2211.26989-.3878.35229-.1657.0824-.3593.1236-.5809.1236h-.75003v-.61367h.59093c.0928 0 .1719-.0161.2372-.0483.0663-.03314.1169-.08002.152-.14062.036-.06061.054-.13211.054-.21449 0-.08334-.018-.15436-.054-.21307-.0351-.05966-.0857-.10511-.152-.13636-.0653-.0322-.1444-.0483-.2372-.0483h-.2784V11h-.78981Zm3.41481-2.90909V11h-.7898V8.09091h.7898Z"/>
                       <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M8.31818 2c-.55228 0-1 .44772-1 1v.72878c-.06079.0236-.12113.04809-.18098.07346l-.55228-.53789c-.38828-.37817-1.00715-.37817-1.39543 0L3.30923 5.09564c-.19327.18824-.30229.44659-.30229.71638 0 .26979.10902.52813.30229.71637l.52844.51468c-.01982.04526-.03911.0908-.05785.13662H3c-.55228 0-1 .44771-1 1v2.58981c0 .5523.44772 1 1 1h.77982c.01873.0458.03802.0914.05783.1366l-.52847.5147c-.19327.1883-.30228.4466-.30228.7164 0 .2698.10901.5281.30228.7164l1.88026 1.8313c.38828.3781 1.00715.3781 1.39544 0l.55228-.5379c.05987.0253.12021.0498.18102.0734v.7288c0 .5523.44772 1 1 1h2.65912c.5523 0 1-.4477 1-1v-.7288c.1316-.0511.2612-.1064.3883-.1657l.5435.2614v.4339c0 .5523.4477 1 1 1H14v.0625c0 .5523.4477 1 1 1h.0909v.0625c0 .5523.4477 1 1 1h.6844l.4952.4823c1.1648 1.1345 3.0214 1.1345 4.1863 0l.2409-.2347c.1961-.191.3053-.454.3022-.7277-.0031-.2737-.1183-.5342-.3187-.7207l-6.2162-5.7847c.0173-.0398.0342-.0798.0506-.12h.7799c.5522 0 1-.4477 1-1V8.17969c0-.55229-.4478-1-1-1h-.7799c-.0187-.04583-.038-.09139-.0578-.13666l.5284-.51464c.1933-.18824.3023-.44659.3023-.71638 0-.26979-.109-.52813-.3023-.71637l-1.8803-1.8313c-.3883-.37816-1.0071-.37816-1.3954 0l-.5523.53788c-.0598-.02536-.1201-.04985-.1809-.07344V3c0-.55228-.4477-1-1-1H8.31818Z"/>
                     </svg>
@@ -1222,6 +1250,7 @@
 
   function themeToggleMode() {
   
+    showLoading()
     const theme = $state.data.theme()
     const isDark = theme === 'dark'
     const prefixToReplace = isDark ? 'light:' : 'dark:';
@@ -1246,6 +1275,7 @@
         }
       })
     }
+    hideLoading()
 
   }
 
@@ -1284,7 +1314,15 @@
     });
   }
 
-  
+  function toggleDropdown() {
+    const menu = $query('#dropdownMenu');
+    menu.classList.toggle('hidden');
+
+    setTimeout(() => {
+      menu.classList.toggle('hidden');
+    }, 1000 * 3);
+  }
+
   $state.el.bucketCreate.addEventListener('click', () => {
     $state.el.bucketModal.classList.remove('hidden');
   })
@@ -1386,7 +1424,7 @@
         name : file.name,
         size : file.size,
         extension : String(file.name)?.split('.').pop(),
-        lastModified : new Date().toJSON(),
+        lastModified : covertDate(),
         path : `${path}/${file.name}`
       } ,1)
     }

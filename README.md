@@ -16,79 +16,13 @@ npm install tspace-nfs --save
 ## Basic Usage
 - [Server](#server)
 - [Client](#client)
+- [Studio](#studio)
 
 ## Server
 ```js
 import { NfsServer } from "tspace-nfs";
 
 new NfsServer()
-// localhost:8000/studio
-.useStudio({
-    onSetup: () => {
-      return {
-        logo: {
-            index:  `<img width="56" height="56" src="${base64}">`,
-            login : `<img class="mx-auto h-20 w-auto" src="${base64}">`,
-            fav : `<link rel="icon" type="image/x-icon" href="${favicon}">`
-        },
-        title : 'Media',
-        name : 'NFS-Stdio',
-        description: 'NFS-storage'
-      }
-    },
-    onCredentials : async ({ username , password }) => {
-
-      // The simple example, you can use any database or another to a wrapper check the credentials for studio.
-      const credentials = [
-        {
-            buckets : ['*'],
-            username: 'root',
-            password: '',
-        }
-      ]
-  
-      const find = credentials.find(v => v.username === username && v.password === password )
-  
-      const result = {
-          logged : find == null ? false : true, // if true can login
-          buckets : find == null ? [] : find?.buckets
-      }
-  
-      return result
-    },
-    onBucketCreated : async ({ token , secret , bucket }) => {
-
-      // The simple example, you can use any database or another to store data.
-      console.log({
-          token , secret , bucket
-      })
-    
-      return
-    },
-     onLoadBucketCredentials  : async () => {
-
-    // The simple example, you can use any database or another to get the credentials.
-      const credentials = [
-          {
-              token : 't', 
-              secret : 's', 
-              bucket : 'b'
-          },
-          {
-              token : 't1', 
-              secret : 's1', 
-              bucket : 'b1'
-          },
-          {
-              token : 't2', 
-              secret : 's2', 
-              bucket : 'b2'
-          }
-      ]
-
-      return credentials 
-    }
-})
 .onLoadBucketLists(async () => {
     // The simple example, you can use any database or another to inform the server about the available bucket lists.
     return await new Promise(r => setTimeout(() => r(['b1','b2']), 200));
@@ -150,6 +84,8 @@ const nfs = new NfsClient({
     exists   : true     // default exists false for check if the file exists
   }) 
   // if using exists will return null if not exists file
+
+  const meta = await nfs.toMeta(fileDirectory)
   
   const base64 = await nfs.toBase64(fileDirectory)
 
@@ -160,7 +96,8 @@ const nfs = new NfsClient({
   const { path , size , name , url } =  await nfs.save({ // can you use nfs.upload too
     file : file.tempFilePath,
     name : 'my-video.mp4',
-    folder : 'my-folder'
+    folder : 'my-folder',
+    // type : 'stream' | 'form-data' -> default = form-data
   })
 
   await nfs.saveAs({ // can you use nfs.uploadBase64 too
@@ -179,3 +116,73 @@ const nfs = new NfsClient({
 })()
 
 ```
+
+## Studio
+```js
+import { NfsServer } from "tspace-nfs";
+
+new NfsServer()
+.useStudio({
+    onSetup: () => {
+      return {
+        logo: {
+            index:  `<img width="56" height="56" src="${base64}">`,
+            login : `<img class="mx-auto h-20 w-auto" src="${base64}">`,
+            fav : `<link rel="icon" type="image/x-icon" href="${favicon}">`
+        },
+        title : 'Media',
+        name : 'NFS-Stdio',
+        description: 'NFS-storage'
+      }
+    },
+    onCredentials : async ({ username , password }) => {
+      // The simple example, you can use any database or another to a wrapper check the credentials for studio.
+      const credentials = [
+        {
+            buckets : ['*'], // or ['dev','dev1']
+            username: 'root',
+            password: '',
+        }
+      ]
+  
+      const find = credentials.find(v => v.username === username && v.password === password )
+  
+      const result = {
+          logged : find == null ? false : true, // if true can login
+          buckets : find == null ? [] : find?.buckets
+      }
+  
+      return result
+    },
+    onBucketCreated : async ({ token , secret , bucket }) => {
+
+      // The simple example, you can use any database or another to store data.
+      console.log({
+          token , secret , bucket
+      })
+    
+      return
+    },
+    onLoadBucketCredentials  : async () => {
+    // The simple example, you can use any database or another to get the credentials.
+      const credentials = [
+        {
+          token : 'token-dev', 
+          secret : 'secret-dev', 
+          bucket : 'dev'
+        },
+        {
+          token : 'token-dev1', 
+          secret : 'secret-dev1', 
+          bucket : 'dev1'
+        }
+      ]
+
+      return credentials 
+    }
+})
+.listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}/studio`))
+```
+
+Login 'http://localhost:8000/studio' with your credentials in onCredentials
+![NFS Studio](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio.png)

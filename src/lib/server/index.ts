@@ -69,10 +69,12 @@ class NfsServer extends NfsStudio {
       router.post('/folders', this._authMiddleware ,this._apiFolders)
       router.post('/base64',  this._authMiddleware ,this._apiBase64)
       router.post('/stream',  this._authMiddleware ,this._apiStream)
+      router.post('/meta',  this._authMiddleware ,this._apiMeta)
       router.post('/remove',  this._authMiddleware ,this._apiRemove)
       router.post('/upload',  this._authMiddleware ,this._apiUpload)
       router.post('/upload/merge',  this._authMiddleware ,this._apiMerge)
       router.post('/upload/base64', this._authMiddleware ,this._apiUploadBase64)
+      router.post('/upload/stream',this._authMiddleware , this._apiUploadStream)
     
       return router
     })
