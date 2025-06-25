@@ -186,3 +186,7 @@ new NfsServer()
 
 Login 'http://localhost:8000/studio' with your credentials in onCredentials
 ![NFS Studio](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio.png)
+
+http://localhost:8000/studio/dashboard
+![NFS Studio Dashboard](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio-dashboard.png)
+![NFS Studio Dashboard](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio-console.png)
