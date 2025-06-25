@@ -17,6 +17,8 @@ npm install tspace-nfs --save
 - [Server](#server)
 - [Client](#client)
 - [Studio](#studio)
+- [Images](#images)
+- [Example](#example)
 
 ## Server
 ```js
@@ -183,10 +185,17 @@ new NfsServer()
 })
 .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}/studio`))
 ```
+## Images
 
-Login 'http://localhost:8000/studio' with your credentials in onCredentials
+Login 'http://localhost:8000/studio' with your credentials in onCredentials  
 ![NFS Studio](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio.png)
 
-http://localhost:8000/studio/dashboard
+http://localhost:8000/studio/dashboard  
 ![NFS Studio Dashboard](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio-dashboard.png)
+
+http://localhost:8000/studio/console?cid=<cid>
 ![NFS Studio Dashboard](https://raw.githubusercontent.com/thanathip41/tspace-nfs/master/images/nfs-studio-console.png)
+
+## Example
+
+[View live source](https://github.com/thanathip41/tspace-nfs/blob/master/example/src/index.ts)
