@@ -8,19 +8,25 @@ import { type TContext } from 'tspace-spear'
 import { NfsServerCore } from './server.core'
 import type { 
   TCredentials, 
+  TLoadMonitors, 
+  TLoadRequestLog, 
   TLoginCrentials, 
   TSetup 
 } from '../types'
+import { exec } from 'child_process'
+import axios from 'axios'
 
 class NfsStudio extends NfsServerCore {
 
   protected _onStudioBucketCreated    ?: ({ bucket , secret , token } : TCredentials) => Promise<void> | null
   protected _onStudioCredentials      ?: ({ username, password } : TLoginCrentials) => Promise<{ logged : boolean , buckets : string[] }> | null
-  protected _onLoadBucketCredentials  ?: () => Promise<TCredentials[]>
-  protected _onSetup                  ?: () => TSetup
+  protected _onStudioLoadBucketCredentials  ?: () => Promise<TCredentials[]>;
+  protected _onStudioSetup                  ?: () => TSetup
+  protected _onStudioRequestLogs            ?: () => Promise<TLoadRequestLog[]>;
+  protected _onStudioMonitors               ?: () => Promise<TLoadMonitors[]>
 
   private BASE_FOLDER_STUDIO = 'studio-html'
-  private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30
+  private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30 // 30 days
 
   /**
    * The 'useStudio' is method used to wrapper to check the credentials for studio.
@@ -33,34 +39,47 @@ class NfsStudio extends NfsServerCore {
     onCredentials,
     onBucketCreated,
     onLoadBucketCredentials,
-    onSetup
+    onSetup,
+    onLoadRequests,
+    onLoadMonitors
   } : {
     onCredentials   : (({ username, password }: { username: string; password: string }) => Promise<{ logged: boolean; buckets: string[] }>)
     onBucketCreated ?: (({ token, secret, bucket }: { token: string; secret: string; bucket: string }) => Promise<void>),
     onLoadBucketCredentials ?: (() => Promise<{ bucket : string , token : string , secret : string}[]>),
     onSetup ?: () => TSetup
+    onLoadRequests ?: () => Promise<TLoadRequestLog[]>
+    onLoadMonitors ?: () => Promise<TLoadMonitors[]>
   }): this {
 
     this._onStudioCredentials = onCredentials
     this._onStudioBucketCreated = onBucketCreated
-    this._onLoadBucketCredentials = onLoadBucketCredentials
-    this._onSetup = onSetup
+    this._onStudioLoadBucketCredentials = onLoadBucketCredentials
+    this._onStudioSetup = onSetup
+    this._onStudioRequestLogs = onLoadRequests
+    this._onStudioMonitors = onLoadMonitors
 
     // creating file meta for any buckets
     this._utils.syncMetadata('*')
-    .catch(err => console.log(err))
+    .catch(_ => null)
 
     return this;
   }
 
-  protected studio = async ({  req, res , cookies } : TContext) => {
+  protected studio = async ({ res , cookies } : TContext) => {
+
+    if (!fsSystem.existsSync(pathSystem.join(pathSystem.resolve(),this._rootFolder))) {
+      await fsSystem.promises.mkdir(this._rootFolder, { recursive: true });
+    }
 
     const auth = cookies['auth.session']
 
     const { success , data } = this._verifyToken(auth)
 
     if(!auth || auth == null || !success) {
-      const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, this.BASE_FOLDER_STUDIO,'login.html'), 'utf8')
+      const html = await fsSystem.promises.readFile(
+        pathSystem.join(__dirname, this.BASE_FOLDER_STUDIO,'login.html'), 
+        'utf8'
+      )
 
       const minifiedHtml = await minify(html, {
         collapseWhitespace: true,
@@ -125,7 +144,7 @@ class NfsStudio extends NfsServerCore {
 
   }
 
-  protected studioPreview = async ({  req, res , params } : TContext) => {
+  protected studioPagePreview = async ({  req, res , params } : TContext) => {
 
     const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
@@ -189,7 +208,7 @@ class NfsStudio extends NfsServerCore {
     })
 
     set(res)
-    
+
     return stream.pipe(res)
 
   }
@@ -417,7 +436,7 @@ class NfsStudio extends NfsServerCore {
 
       await writeFile(file.tempFilePath , this._utils.normalizePath({ directory , path : name , full : true }))
 
-      await this._utils.syncMetadata(bucket)
+      await this._utils.syncMetadata(bucket).catch(_ => null)
 
       return res.ok({
         path : this._utils.normalizePath({ directory : folder , path :name }),
@@ -452,11 +471,16 @@ class NfsStudio extends NfsServerCore {
         }
       })
       
-      const archive = archiver('zip', { zlib: { level: 1 } });
+      const archive = archiver('zip', { zlib: { level: 1 }});
 
-      res.setHeader('Content-Disposition', `attachment; filename="NFS-studio_${+new Date()}.zip"`);
+      archive.on('error', err => {
+        console.log(err)
+        return res.serverError('Error during archive');
+      });
+
+      res.setHeader('Content-Disposition', `attachment; filename="download_${+new Date()}.zip"`);
       res.setHeader('Content-Type', 'application/zip');
-    
+
       archive.pipe(res)
       
       for (const item of items) {
@@ -464,10 +488,11 @@ class NfsStudio extends NfsServerCore {
           archive.directory(item.path, item.name);
           continue
         } 
+       
         archive.file(item.path, { name: item.name });
       }
       
-      archive.finalize();
+      return await archive.finalize();
 
     } catch (err) {
 
@@ -515,7 +540,7 @@ class NfsStudio extends NfsServerCore {
           }
         }
 
-        const loadCredentials = this._onLoadBucketCredentials == null ? [] : await this._onLoadBucketCredentials();
+        const loadCredentials = this._onStudioLoadBucketCredentials == null ? [] : await this._onStudioLoadBucketCredentials();
 
         const credentials = loadCredentials.find(v => v.bucket === bucket);
 
@@ -698,7 +723,7 @@ class NfsStudio extends NfsServerCore {
 
     if(path.includes(this._trash)) {
       this._utils.remove(fullPath , { delayMs : 0 })
-      await this._utils.syncMetadata(bucket)
+      await this._utils.syncMetadata(bucket).catch(_ => null)
       return res.ok()
     }
 
@@ -749,7 +774,7 @@ class NfsStudio extends NfsServerCore {
     })
   }
 
-  protected studioShared = async ({  req, res , params , query } : TContext) => {
+  protected studioPageShared = async ({  req, res , params , query } : TContext) => {
 
     const path = String(params['*']).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "")
  
@@ -812,6 +837,127 @@ class NfsStudio extends NfsServerCore {
 
   }
 
+  protected studioPageDashboard = async ({  req, res , params , query } : TContext) => {
+
+    const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, this.BASE_FOLDER_STUDIO,'dashboard.html'), 'utf8')
+
+    const minifiedHtml = await minify(html, {
+      collapseWhitespace: true,
+      removeComments: true,
+      minifyCSS: true,
+      minifyJS: true
+    });
+
+    return res.html(this._htmlFormatted(minifiedHtml));
+
+  }
+
+  protected studioLogRequest = async ({  res , body , cookies } : TContext) => {
+
+    if(this._onStudioRequestLogs == null) {
+      return res.badRequest('Please enable the studio.');
+    }
+
+    return res.ok({
+      requests : await this._onStudioRequestLogs()
+    })
+  }
+
+  protected studioLogMonitors = async ({  res , body , cookies } : TContext) => {
+
+    if(this._onStudioMonitors == null) {
+      return res.badRequest('Please enable the studio.');
+    }
+
+    return res.ok({
+      requests : await this._onStudioMonitors()
+    })
+  }
+
+  protected studioConsoleLogs = async ({ req, query,  res , params, cookies } : TContext) => {
+
+    const MAX_RETRY = 8;
+    const rawTail = String(query.tail ?? "200");
+
+    let tail = parseInt(rawTail, 10);
+
+    if (isNaN(tail) || tail < 1 || tail > 100_000) {
+      tail = 200;
+    }
+    
+    const cid = params['cid'];
+    const id = this._utils.getContainerId();
+   
+    res.setHeader('Content-Type', 'text/plain');
+
+    if(cid == null || cid === '') {
+      res.statusCode = 400;
+      return res.end(`The 'cid' parameter is required.`);
+    }
+
+    if(id == null || id === '') {
+      res.statusCode = 400;
+      return res.end(`The future is supported only docker`);
+    }
+
+    // try again because load balancer send request to other node
+    if((id !== cid)) {
+      let retry = Number(query.retry ? Number(query.retry) - 1 : MAX_RETRY);
+      retry = Number.isNaN(retry) ? MAX_RETRY : retry;
+
+      if(retry < 0) {
+        res.statusCode = 400;
+        return res.end("");
+      }
+
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const url = `${protocol}://${req.headers.host}/studio/api/logs/console/${cid}?tail=${tail}&retry=${retry}`;
+      const authorization = cookies["auth.session"];
+
+      const { data } = await axios.get(url, {
+        responseType: 'text',
+        headers: {
+          Cookie: `auth.session=${authorization}`
+        }
+      }).catch(() => ({ data: '' }));
+
+      if(data === '') {
+        res.statusCode = 400;
+        return res.end("");
+      };
+
+      res.statusCode = 200;
+      return res.end(data);
+    }
+
+    // next step logs in k8s
+    const command = `docker logs --tail ${tail} ${cid}`;
+    
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (err, stdout, stderr) => {
+      if (err) {
+        res.statusCode = 400;
+        return res.end(`${stderr || err.message}`.replace('\n',''));
+      }
+      res.statusCode = 200;
+      return res.end(stdout ? stdout.toString() : "");
+    });
+  }
+
+  protected studioPageConsoleLogs = async ({  res } : TContext) => {
+
+    const html = await fsSystem.promises.readFile(pathSystem.join(__dirname, this.BASE_FOLDER_STUDIO,'console.html'), 'utf8')
+
+    const minifiedHtml = await minify(html, {
+      collapseWhitespace: true,
+      removeComments: true,
+      minifyCSS: true,
+      minifyJS: true
+    });
+
+    return res.html(this._htmlFormatted(minifiedHtml));
+    
+  }
+
   private _verifyToken (token : string) {
   
       try {
@@ -844,7 +990,7 @@ class NfsStudio extends NfsServerCore {
   }
 
   private _htmlFormatted = ( html : string,username ?: string | null) => {
-    const setup = this._onSetup == null ? {} : this._onSetup()
+    const setup = this._onStudioSetup == null ? {} : this._onStudioSetup()
     return String(html)
     .replace('{{auth.username}}',username == null || username === '' ? 'N' : username.charAt(0).toUpperCase())
     .replace('{{name}}',setup?.name ?? 'NFS-Studio')

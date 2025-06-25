@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{title}}</title>
+  {{logo.fav}}
+  <script src="https://cdn.tailwindcss.com/3.4.14"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.0.0/ansi_up.min.js"></script>
+</head>
+<body class="bg-[#1e1e1e] text-gray-200 font-mono">
+
+<div class="max-w-8xl mx-auto flex flex-col h-[100vh] border border-gray-700 rounded-lg shadow-lg">
+  <h1 class="p-4 text-xl" id="h-cid"></h1>
+  <div id="logConsole" class="bg-[#121212] flex-grow overflow-y-auto p-3 text-sm leading-relaxed scroll-smooth whitespace-pre-wrap">
+    <span class="text-gray-500">Loading...</span>
+  </div>
+
+  <div class="bg-[#1a1a1a] border-t border-gray-700 px-4 py-3 flex flex-wrap gap-2 items-center relative">
+
+    <button id="followBtn" class="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded text-sm">Follow</button>
+    <button onclick="clearLogs()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">Clear</button>
+    <button onclick="downloadLogs()" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm">Download</button>
+
+    <div class="ml-auto flex items-center space-x-2">
+      <button id="settingsBtn" class="bg-blue-700 px-2 py-1 rounded text-sm flex items-center justify-center relative z-50">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+      </button>
+      <input type="text" id="filterInput" placeholder="Filter"
+        class="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-sm w-60" />
+    </div>
+
+    <span id="status" class="text-green-400 text-sm ml-2">Connected</span>
+  </div>
+
+</div>
+
+<div id="settingsMenu" class="fixed bottom-[3.50rem] right-[15rem] w-64 bg-gray-800 border border-gray-700 rounded shadow-lg p-3 hidden z-50">
+  <label class="block mb-2">
+    <span class="text-gray-300 text-sm">Show the last</span>
+    <select id="timeRange" class="mt-1 w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+      <option value="tail:100" selected>100 Lines</option>
+      <option value="tail:300">300 Lines</option>
+      <option value="tail:500">500 Lines</option>
+      <option value="tail:1000">1000 Lines</option>
+      <option value="tail:10000">10000 Lines</option>
+      <option value="time:1">1 Minute</option>
+      <option value="time:15">15 Minutes</option>
+      <option value="time:30">30 Minutes</option>
+      <option value="time:60">1 Hour</option>
+      <option value="time:720">12 Hours</option>
+      <option value="time:1440">24 Hours</option>
+      <option value="all">Everything</option>
+    </select>
+  </label>
+</div>
+
+<script>
+  const $query = (element) => document.querySelector(element);
+  const $$query = (element) => document.querySelectorAll(element);
+  const url = `${window.location.protocol}//${window.location.host}`;
+
+  const logConsole = $query('#logConsole');
+  const ansi_up = new AnsiUp();
+  const filterInput = $query('#filterInput');
+  const followBtn = $query('#followBtn');
+  const settingsBtn = $query('#settingsBtn');
+  const settingsMenu = $query('#settingsMenu');
+  const timeRange = $query('#timeRange');
+  const headerCid = $query('#h-cid');
+
+  const params = new URLSearchParams(window.location.search);
+  const cid = params.get('cid');
+
+  let followLogs = true;
+  let allLogs = '';
+  let mode = timeRange.value;
+
+  followBtn.onclick = () => {
+    followLogs = !followLogs;
+    followBtn.textContent = followLogs ? 'Follow' : 'Paused';
+    followBtn.classList.toggle('bg-blue-500', followLogs);
+    followBtn.classList.toggle('bg-gray-600', !followLogs);
+  };
+
+  settingsBtn.onclick = () => {
+    settingsMenu.classList.toggle('hidden');
+  };
+
+  timeRange.onchange = () => {
+    mode = timeRange.value;
+    settingsMenu.classList.toggle('hidden');
+    clearLogs();
+    fetchLogs();
+  };
+
+  function clearLogs() {
+    allLogs = '';
+    renderLogs();
+  }
+
+  function downloadLogs() {
+    const blob = new Blob([allLogs], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'logs.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function withinLastNMinutes(line, minutes) {
+    const match = line.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    if (!match) return false;
+
+    const logTime = new Date(match[0].replace(' ', 'T')); 
+
+    const now = new Date();
+    const diffMs = now - logTime;
+    const diffMinutes = diffMs / (1000 * 60);
+
+    return diffMinutes <= minutes;
+  }
+
+  function renderLogs() {
+    const filterText = filterInput.value.toLowerCase();
+    const minutes = mode.startsWith('time:') ? parseInt(mode.split(':')[1]) : null;
+
+    const lines = allLogs.split('\n').filter(line => {
+      if (minutes !== null && !withinLastNMinutes(line, minutes)) return false;
+      return line.toLowerCase().includes(filterText);
+    });
+
+    const html = ansi_up.ansi_to_html(lines.join('\n'));
+    logConsole.innerHTML = html;
+
+    if (followLogs) logConsole.scrollTop = logConsole.scrollHeight;
+  }
+
+  async function fetchLogs() {
+    if(!followLogs) return; 
+    const statusElement = $query('#status')
+    try {
+
+      let query = ''
+      if (mode.startsWith('tail:')) {
+        tailLines = mode.split(':')[1];
+        query += `?tail=${tailLines}`;
+      }
+
+      const response = await fetch(`${url}/studio/api/logs/console/${cid}${query}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const text = await response.text();
+      allLogs = text;
+
+      renderLogs();
+
+      statusElement.textContent = 'Connected';
+      statusElement.className = 'text-green-400 text-sm ml-2';
+    } catch (err) {
+      statusElement.textContent = 'Disconnected';
+      statusElement.className = 'text-red-500 text-sm ml-2';
+    }
+  }
+
+  filterInput.addEventListener('input', renderLogs);
+  headerCid.innerHTML = `Container: <b class="text-white text-lg"> ${cid} </b>`;
+  setInterval(fetchLogs, 2000);
+  fetchLogs();
+  
+</script>
+
+</body>
+</html>

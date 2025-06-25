@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "declaration": true,                  
+    "target": "ES6",                         
+    "module": "commonjs",                     
+    "lib": ["esnext"], 
+    "allowJs": true,                
+    "checkJs": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,                           
+    "esModuleInterop": true,                 
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "downlevelIteration" : true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "sourceMap": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

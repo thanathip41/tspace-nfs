@@ -5,7 +5,18 @@ const html = `
         <meta charset="utf-8">
         <meta name="color-scheme" content="light dark">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Page not found</title>
+        <title>{{title}}</title>
+        <link rel="icon" type="image/x-icon" href="{{fav}}">
+
+        <meta name="description" content="{{description}}" />
+        <meta name="keywords" content="{{keywords}}"/>
+        <meta name="robots" content="{{robots}}"/>
+
+        <meta property="og:title" content="{{title}}" />
+        <meta property="og:description" content="{{description}}" />
+        <meta property="og:type" content="{{type}}" />
+        <meta property="og:url" content="{{url}}" />
+
         <style>
             body {
                 color: #b6b6b6;
@@ -41,6 +52,16 @@ const html = `
             </div>
         </div>
     </body>
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "{{type}}",
+        "name": "{{title}}",
+        "description": "{{description}}",
+        "url": "{{url}}"
+    }
+    </script>
 </html>
 `
 export default html

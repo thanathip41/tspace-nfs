@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gradient-to-br from-indigo-50 via-white to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{title}}</title>
+  {{logo.fav}}
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.14"></script>
+  <style>
+    #summaryList::-webkit-scrollbar {
+      width: 8px;
+    }
+    #summaryList::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #summaryList::-webkit-scrollbar-thumb {
+      background-color: #8b5cf6;
+      border-radius: 9999px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    #summaryList li {
+      cursor: pointer;
+    }
+    #summaryList li.active {
+      background-color: #3730a3;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 p-6 flex flex-col items-center gap-12">
+
+  <section class="w-full max-w-7xl">
+    <h2 class="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6 text-center">Monitors</h2>
+    <div id="monitors" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+    </div>
+  </section>
+
+  <section class="w-full max-w-7xl bg-white dark:bg-gray-950 rounded-3xl shadow-xl overflow-hidden flex flex-col gap-6 py-6">
+    
+    <h1 class="text-4xl font-extrabold text-indigo-700 dark:text-indigo-400 text-center">
+      Bucket Requests
+    </h1>
+
+    <div id="requests" class="flex flex-col md:flex-row w-full gap-6">
+
+      <div class="flex-1 p-4 min-w-[350px] relative flex flex-col bg-white dark:bg-gray-800 rounded-xl">
+        <div class="flex justify-end mb-4">
+          <button id="fullscreenBtn" class="bg-indigo-500 dark:bg-indigo-700 text-white p-2 rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-800" title="Toggle Fullscreen">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"d="M4 8V4h4M4 4l6 6M20 8V4h-4M20 4l-6 6M4 16v4h4M4 20l6-6M20 16v4h-4M20 20l-6-6" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="chartContainer" class="flex-grow h-[400px] md:h-[500px] dark:bg-gray-700 rounded-md">
+          <canvas id="bucketChart7Days" class="w-full h-full"></canvas>
+        </div>
+      </div>
+
+      <aside class="w-full md:w-[21rem] bg-indigo-50 dark:bg-gray-800 p-6 border-t md:border-t-0 md:border-l border-indigo-200 dark:border-gray-700 max-h-[600px] flex flex-col rounded-xl">
+        <div class="text-sm font-semibold text-indigo-900 dark:text-indigo-300 mb-2 text-right select-none" id="totalRequestsDisplay">
+          Total Requests: 0
+        </div>
+
+        <input id="searchInput" type="search" placeholder="Search buckets..." class="mb-4 px-4 py-2 rounded-lg border border-indigo-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-900 dark:text-indigo-100" />
+
+        <ol id="summaryList" class="list-decimal list-inside space-y-2 font-mono text-indigo-900 dark:text-indigo-200 text-sm overflow-y-auto flex-grow">
+          <li class="h-4 w-full bg-gray-300 dark:bg-gray-700 rounded"></li>
+          <li class="h-4 w-3/4 bg-gray-300 dark:bg-gray-700 rounded"></li>
+          <li class="h-4 w-5/6 bg-gray-300 dark:bg-gray-700 rounded"></li>
+          <li class="h-4 w-2/3 bg-gray-300 dark:bg-gray-700 rounded"></li>
+          <li class="h-4 w-4/5 bg-gray-300 dark:bg-gray-700 rounded"></li>
+          <li class="h-4 w-full bg-gray-300 dark:bg-gray-700 rounded"></li>
+        </ol>
+      </aside>
+
+    </div>
+  </section>
+
+</body>
+
+  <script>
+    (() => {
+
+    const $query = (element) => document.querySelector(element);
+
+    const url = `${window.location.protocol}//${window.location.host}`;
+
+    async function InitChartRequest() {
+    
+      const ctx = $query('#bucketChart7Days').getContext('2d');
+      const summaryList = $query('#summaryList');
+      const searchInput = $query('#searchInput');
+      const fullscreenBtn = $query('#fullscreenBtn');
+      const chartContainer = $query('#chartContainer');
+      const totalRequestsDisplay = $query('#totalRequestsDisplay');
+
+      let myChart = null;
+      let datasets = [];
+      let sortedDays = [];
+      let activeIndexes = new Set();
+
+      async function fetchAndRenderRequestData() {
+        try {
+          await new Promise(r => setTimeout(r, 800));
+
+          const res = await fetch(`${url}/studio/api/logs/requests`);
+          if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+          const { requests } = await res.json();
+
+          if(requests.length) {
+            chartContainer.classList.remove('dark:bg-gray-700','rounded-md');
+          }
+
+          const bucketDayCounts = {};
+          const allDaysSet = new Set();
+
+          for (const req of requests) {
+            const day = new Date(req.date).toISOString().slice(0, 10);
+            allDaysSet.add(day);
+            const bucket = req.bucket;
+            const count = req.count || 0;
+
+            if (!bucketDayCounts[bucket]) bucketDayCounts[bucket] = {};
+            bucketDayCounts[bucket][day] = count;
+          }
+
+          sortedDays = Array.from(allDaysSet).sort();
+          const buckets = Object.keys(bucketDayCounts);
+
+          datasets = buckets.map((bucket, idx) => {
+            const color = `hsl(${(idx * 360 / buckets.length) % 360}, 70%, 50%)`;
+            const data = sortedDays.map(day => bucketDayCounts[bucket][day] || 0);
+
+            return {
+              label: bucket,
+              data,
+              borderColor: color,
+              backgroundColor: color,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              pointHitRadius: 12,
+              borderWidth: 2,
+              totalRequests: data.reduce((a, b) => a + b, 0),
+              _index: idx,
+            };
+          });
+
+          datasets.sort((a, b) => b.totalRequests - a.totalRequests);
+          datasets.forEach((ds, i) => ds.label = `#${i + 1} ${ds.label}`);
+
+          renderChart(datasets, sortedDays);
+          renderSummary(datasets);
+          updateTotalRequestsDisplay(datasets);
+        } catch (err) {
+          console.error('Failed to fetch or render data:', err);
+        }
+      }
+
+      function renderChart(data, labels) {
+        if (myChart) myChart.destroy();
+    
+        myChart = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: data },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', intersect: false },
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: { boxWidth: 14, padding: 10 }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    const label = ctx.dataset.label.replace(/^#\d+\s+/, '');
+                    const value = ctx.parsed.y;
+                    const date = ctx.label;
+                    return [`${label}: ${value}`];
+                  }
+                },
+                padding: 15,
+                cornerRadius: 8,
+              }
+            },
+            scales: {
+              y: { beginAtZero: true, title: { display: true, text: 'Requests' } },
+              x: { title: { display: true, text: 'Date' } }
+            }
+          }
+        });
+      }
+
+      function renderSummary(data, filter = '') {
+        summaryList.innerHTML = data
+        .filter(bucket => bucket.label.toLowerCase().includes(filter.toLowerCase()))
+        .map(bucket => `
+          <li tabindex="0" data-index="${bucket._index}"
+              class="${activeIndexes.has(bucket._index) ? 'active' : ''} hover:bg-indigo-300 dark:hover:bg-indigo-700 rounded px-2 py-1 cursor-pointer">
+            <span>${bucket.label.replace(/^#\d+ /, '')}</span> — <strong>${bucket.totalRequests.toLocaleString()}</strong>
+          </li>`).join('');
+      }
+
+      function updateTotalRequestsDisplay(data) {
+        const total = data.reduce((sum, ds) => sum + ds.totalRequests, 0);
+        totalRequestsDisplay.textContent = `Total Requests: ${total.toLocaleString()}`;
+      }
+
+      function highlightLine(index) {
+        if (!myChart) return;
+        myChart.data.datasets.forEach((ds, i) => {
+          ds.borderWidth = i === index ? 6 : 2;
+          ds.pointRadius = i === index ? 8 : 5;
+          ds.pointHoverRadius = i === index ? 10 : 7;
+        });
+        myChart.update();
+      }
+
+      function resetHighlight() {
+        if (!myChart) return;
+        myChart.data.datasets.forEach(ds => {
+          ds.borderWidth = 2;
+          ds.pointRadius = 5;
+          ds.pointHoverRadius = 7;
+        });
+        myChart.update();
+      }
+
+      summaryList.addEventListener('mouseover', e => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const idx = Number(li.dataset.index);
+        if (!isNaN(idx)) highlightLine(idx);
+      });
+      summaryList.addEventListener('mouseout', resetHighlight);
+      
+      summaryList.addEventListener('focusin', e => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const idx = Number(li.dataset.index);
+        if (!isNaN(idx)) highlightLine(idx);
+      });
+      summaryList.addEventListener('focusout', resetHighlight);
+
+      searchInput.addEventListener('input', e => {
+        renderSummary(datasets, e.target.value);
+      });
+
+      summaryList.addEventListener('click', e => {
+        const li = e.target.closest('li');
+
+        if (!li) return;
+
+        const idx = Number(li.dataset.index);
+
+        if (isNaN(idx)) return;
+
+        if (activeIndexes.has(idx)) {
+          activeIndexes.delete(idx);
+        } else {
+          activeIndexes.add(idx);
+        }
+
+        const selected = datasets.filter(ds => activeIndexes.has(ds._index));
+        if (!selected.length) {
+          renderChart(datasets, sortedDays);
+          renderSummary(datasets);
+          updateTotalRequestsDisplay(datasets);
+        } else {
+          renderChart(selected, sortedDays);
+          renderSummary(datasets);
+          updateTotalRequestsDisplay(selected);
+        }
+      });
+
+
+      fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          chartContainer.requestFullscreen().catch(err => alert(`Fullscreen error: ${err.message}`));
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      const resizeObserver = new ResizeObserver(() => {
+        if (myChart) myChart.resize();
+      });
+      resizeObserver.observe(chartContainer);
+
+      fetchAndRenderRequestData();
+
+      setInterval(fetchAndRenderRequestData, 1000 * 60);
+    }
+
+
+    async function InitMonitor() {
+
+      const container = $query("#monitors");
+
+      container.innerHTML = createSkeletonCard()
+
+      async function fetchMonitorsData() {
+        try {
+          await new Promise(r => setTimeout(r, 800));
+          const res = await fetch(`${url}/studio/api/logs/monitors`);
+          const data = await res.json();
+          if (!data.success || !data.requests) throw new Error("Invalid data format");
+          return data.requests;
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function getPercentColor(percent) {
+        if (percent > 80) return '#ef4444'; 
+        if (percent > 50) return '#f97316'; 
+        if (percent > 30) return '#facc15';    
+        return '#22c55e'; 
+      }
+
+      function createServerCard(server) {
+        const totalRam = (server.rams.reduce((sum, r) => sum + r.total, 0)) / server.rams.length;
+        const usedRam = server.rams.reduce((sum, r) => sum + r.used, 0) / server.rams.length;
+        const percentRam = (usedRam / totalRam) * 100;
+
+        const totalCpu = server.cpus.reduce((sum, c) => sum + c.total, 0) / server.cpus.length;
+        const usedCpu = server.cpus.reduce((sum, c) => sum + c.used, 0) / server.cpus.length;
+        const percentCpu = usedCpu
+
+        return `
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 font-mono min-w-[280px]">
+
+          <div class="absolute top-2 right-2">
+            <a
+              href="${url}/studio/console?cid=${server.cid}"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View Console Logs"
+              class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h4m-9 4h10a2 2 0 002-2V7a2 2 0 00-2-2H8a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </a>
+          </div>
+
+          <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-400 mb-4">${server.host}</h2>
+
+          <section class="mb-6">
+            <h3 class="text-lg font-semibold mb-2">Memory Usage</h3>
+            <div class="space-y-1 text-sm">
+              <div class="flex justify-between"><span>Total Memory</span><span>${totalRam.toFixed(2)} MB</span></div>
+              <div class="flex justify-between"><span>Avg Usage</span><span>${usedRam.toFixed(2)} MB</span></div>
+            </div>
+            <div class="mt-2">
+              <div class="w-full h-4 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  class="h-4 rounded-full"
+                  style="width: ${percentRam.toFixed(1)}%; background-color: ${getPercentColor(percentRam)};"
+                ></div>
+              </div>
+              <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">Memory Used: ${percentRam.toFixed(1)}%</div>
+            </div>
+          </section>
+
+          <section>
+            <h3 class="text-lg font-semibold mb-2">CPU Usage</h3>
+            <div class="space-y-1 text-sm">
+              <div class="flex justify-between"><span>Total Cores</span><span>${totalCpu.toFixed(1)}</span></div>
+              <div class="flex justify-between"><span>Avg Usage</span><span>${usedCpu.toFixed(2)}%</span></div>
+            </div>
+            <div class="mt-2">
+              <div class="w-full h-4 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  class="h-4 rounded-full"
+                  style="width: ${percentCpu.toFixed(1)}%; background-color: ${getPercentColor(percentCpu)};"
+                ></div>
+              </div>
+              <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">CPU Used: ${percentCpu.toFixed(1)}%</div>
+            </div>
+          </section>
+        </div>
+        `;
+      }
+
+      function createSkeletonCard () {
+        const html = `
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 font-mono min-w-[280px] animate-pulse">
+          <div class="absolute top-2 right-2">
+            <div class="w-5 h-5 rounded bg-gray-300 dark:bg-gray-700"></div>
+          </div>
+
+          <h2 class="h-8 w-40 bg-gray-300 dark:bg-gray-700 rounded mb-4"></h2>
+
+          <section class="mb-6">
+            <h3 class="h-6 w-28 bg-gray-300 dark:bg-gray-700 rounded mb-2"></h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <div class="h-4 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
+                <div class="h-4 w-14 bg-gray-300 dark:bg-gray-700 rounded"></div>
+              </div>
+              <div class="flex justify-between">
+                <div class="h-4 w-20 bg-gray-300 dark:bg-gray-700 rounded"></div>
+                <div class="h-4 w-16 bg-gray-300 dark:bg-gray-700 rounded"></div>
+              </div>
+            </div>
+            <div class="mt-2">
+              <div class="w-full h-4 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-4 rounded-full bg-gray-400 dark:bg-gray-600" style="width: 60%;"></div>
+              </div>
+              <div class="h-3 w-20 bg-gray-300 dark:bg-gray-700 rounded mt-1"></div>
+            </div>
+          </section>
+
+          <section>
+            <h3 class="h-6 w-28 bg-gray-300 dark:bg-gray-700 rounded mb-2"></h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <div class="h-4 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
+                <div class="h-4 w-14 bg-gray-300 dark:bg-gray-700 rounded"></div>
+              </div>
+              <div class="flex justify-between">
+                <div class="h-4 w-20 bg-gray-300 dark:bg-gray-700 rounded"></div>
+                <div class="h-4 w-16 bg-gray-300 dark:bg-gray-700 rounded"></div>
+              </div>
+            </div>
+            <div class="mt-2">
+              <div class="w-full h-4 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-4 rounded-full bg-gray-400 dark:bg-gray-600" style="width: 45%;"></div>
+              </div>
+              <div class="h-3 w-20 bg-gray-300 dark:bg-gray-700 rounded mt-1"></div>
+            </div>
+          </section>
+        </div>
+        `
+        return Array.from({ length: 3 }, (_,i) => i).map(v=> html).join('')
+      }
+
+      const servers = await fetchMonitorsData();
+
+      if(servers.length) {
+        container.innerHTML = servers.map(createServerCard).join('');
+        container.classList.remove('md:grid-cols-3');
+        container.classList.add(`md:grid-cols-${Math.min(3,servers.length)}`);
+      }
+
+      setInterval(fetchMonitorsData, 1000 * 60);
+    }
+
+    InitMonitor();
+    InitChartRequest();
+      
+    })();
+  </script>
+</html>

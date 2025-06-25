@@ -1,10 +1,19 @@
-import pathSystem from "path";
-import fsSystem from "fs";
-import fsExtra from "fs-extra";
-import { Time } from "tspace-utils";
+import pathSystem   from "path";
+import fsSystem     from "fs";
+import fsExtra      from "fs-extra";
+import os           from 'os'
+import { Time }     from "tspace-utils";
 
 export class Utils {
   private backup: number = 30;
+
+  private lastCpuUsageCgroup: number | null = null;
+  private lastCpuTimestamp: number | null = null;
+
+  private CGROUP_MEM_CURR = '/sys/fs/cgroup/memory.current';
+  private CGROUP_MEM_MAX = '/sys/fs/cgroup/memory.max';
+  private CGROUP_CPU_STAT = '/sys/fs/cgroup/cpu.stat';
+  private ETC_HOSTNAME = '/etc/hostname';
 
   constructor(
     private buckets: Function | null,
@@ -21,6 +30,114 @@ export class Utils {
   public setMetaData(meta: string) {
     this.metadata = meta;
     return this;
+  }
+
+  public useHooks(fn: (() => void | Promise<void> | null) | null, ms: number): () => void {
+    if (!fn) return () => {};
+
+    const interval = setInterval(() => {
+      const result = fn();
+      if (result instanceof Promise) result.catch(() => {})
+    }, ms);
+
+    return () => clearInterval(interval);
+  }
+
+  public getContainerId = () => {
+    try {
+      return fsSystem.readFileSync(this.ETC_HOSTNAME, 'utf8').trim();
+    } catch (err) {
+      return null;
+    }
+  }
+
+  public cpuAndMemoryUsage() {
+
+    const readRamUsageFromCgroup = (find : 'max' | 'current'): number | null => {
+      try {
+        const path = find === 'max' ? this.CGROUP_MEM_MAX : this.CGROUP_MEM_CURR
+
+        const v = fsSystem.readFileSync(path, 'utf8');
+        if (v === 'max') return null;
+        return Number(v);
+
+      } catch {
+        return null;
+      }
+    }
+
+    const readCpuUsageFromCgroup = (): number | null => {
+      try {
+        const data = fsSystem.readFileSync(this.CGROUP_CPU_STAT, 'utf8');
+        const stat = Object.fromEntries(
+          data
+            .trim()
+            .split('\n')
+            .map(line => line.split(/\s+/).map((v, i) => (i === 1 ? Number(v) : v)))
+        );
+        return stat.usage_usec || null;
+      } catch {
+        return null;
+      }
+    }
+
+    const toMB = (v : number) =>  Number(Number(v / 1024 / 1024).toFixed(4));
+
+    let ramUsed: number | null  = readRamUsageFromCgroup('current')
+    let ramTotal: number | null = readRamUsageFromCgroup('max')
+
+    if (!ramTotal || !ramUsed) {
+      ramUsed = process.memoryUsage().rss;
+      ramTotal = os.totalmem();
+    }
+
+    const now = new Time().toTimeStamp();
+
+    const cpuCgroupUsage = readCpuUsageFromCgroup();
+
+    let cpuUsedPercent: number = 0;
+
+    if (cpuCgroupUsage !== null) {
+      if (this.lastCpuUsageCgroup === null || this.lastCpuTimestamp === null) {
+        this.lastCpuUsageCgroup = cpuCgroupUsage;
+        this.lastCpuTimestamp = now;
+        cpuUsedPercent = 0;
+      } else {
+        const deltaUsage = cpuCgroupUsage - this.lastCpuUsageCgroup;
+        const deltaTime = now - this.lastCpuTimestamp;
+
+        this.lastCpuUsageCgroup = cpuCgroupUsage;
+        this.lastCpuTimestamp = now;
+
+        const cpus = os.cpus().length;
+        cpuUsedPercent = (deltaUsage / (deltaTime * 1000 * cpus)) * 100;
+
+        if (cpuUsedPercent < 0) cpuUsedPercent = 0;
+        if (cpuUsedPercent > 100) cpuUsedPercent = 100;
+      }
+    } else {
+      const cpus = os.cpus();
+      const usageData = cpus.map(cpu => {
+        const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+        const active = total - cpu.times.idle;
+        return (active / total) * 100;
+      });
+
+      cpuUsedPercent = usageData.reduce((acc, u) => acc + u, 0) / usageData.length || 0;
+    }
+
+    return {
+      ram: {
+        total: toMB(ramTotal || 0),
+        used: toMB(ramUsed || 0),
+        time: new Date().toISOString(),
+      },
+      cpu: {
+        total: os.cpus().length,
+        used: Math.min(100,+cpuUsedPercent.toFixed(4)),
+        time: new Date().toISOString(),
+      },
+    };
   }
 
   public safelyParseJSON = (v: string) => {
@@ -79,7 +196,7 @@ export class Utils {
       return;
     });
 
-    await this.syncMetadata(bucket);
+    await this.syncMetadata(bucket).catch(_ => null);
 
     return;
   }
@@ -357,7 +474,7 @@ export class Utils {
         return;
       });
 
-    await this.syncMetadata(bucket);
+    await this.syncMetadata(bucket).catch(_ => null);
 
     return;
   }

@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  nfs:
+    image: "example-nfs-server:develop"
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    environment:
+      - HOSTNAME=my-server  # {{.Node.Hostname}} using in your vm

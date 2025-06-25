@@ -1,7 +1,6 @@
 import xml          from 'xml'
 import cron         from 'node-cron'
 import { Server }   from 'http'
-import os           from 'os'
 import { 
   type TContext, 
   Spear,
@@ -14,6 +13,7 @@ import { NfsStudio } from './server.studio'
  * 
  * @example
  * import { NfsServer } from "tspace-nfs";
+import fsSystem from 'fs';
  *
  * new NfsServer()
  * .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}`))
@@ -39,7 +39,7 @@ class NfsServer extends NfsStudio {
     })
 
     this._app.useLogger({
-      exceptPath  : /\/benchmark(\/|$)|\/favicon\.ico(\/|$)/
+      exceptPath  : /\/benchmark(\/|$)|console|\/favicon\.ico(\/|$)/
     })
 
     this._app.useBodyParser()
@@ -85,7 +85,7 @@ class NfsServer extends NfsStudio {
         router.get('/' , this.studio)
         router.post('/api/login',this.studioLogin)
         router.get('/api/storage',this._authStudioMiddleware,this.studioStorage)
-        router.get('/preview/*', this._authStudioMiddleware,this.studioPreview)
+        router.get('/preview/*', this._authStudioMiddleware,this.studioPagePreview)
         router.get('/api/preview/*', this._authStudioMiddleware,this.studioPreviewText)
         router.patch('/api/preview/*', this._authStudioMiddleware,this.studioPreviewTextEdit)
         router.delete('/api/logout',this._authStudioMiddleware,this.studioLogout)
@@ -96,11 +96,18 @@ class NfsServer extends NfsStudio {
         router.delete('/api/files/*', this._authStudioMiddleware,this.studioRemove)
         router.post('/api/upload',this._authStudioMiddleware,this.studioUpload)
         router.post('/api/download',this._authStudioMiddleware,this.studioDownload)
-        router.get('/shared/*',this.studioShared)
+
+        router.get('/shared/*',this.studioPageShared)
         router.get('/api/shared/*',this._authStudioMiddleware,this.studioGetPathShared)
- 
+
+        router.get('/dashboard',this._authStudioMiddleware,this.studioPageDashboard)
+        router.get('/api/logs/requests',this._authStudioMiddleware,this.studioLogRequest)
+        router.get('/api/logs/monitors',this._authStudioMiddleware,this.studioLogMonitors)
+        router.get('/console',this._authStudioMiddleware,this.studioPageConsoleLogs)
+        router.get('/api/logs/console/:cid',this._authStudioMiddleware,this.studioConsoleLogs)
         return router
       })
+      
 
     } else {
       this._router.get('/studio' , ({ req , res }) => {
@@ -129,7 +136,7 @@ class NfsServer extends NfsStudio {
       const error = {
         Error : [
             { Code : 'Not found' },
-            { Message : 'The request was invalid'},
+            { Message : 'The request was not found.'},
             { Resource : req.url },
         ]
       }
@@ -149,7 +156,7 @@ class NfsServer extends NfsStudio {
     })
 
     this._app
-    .catch((err : Error , { req , res } : TContext) => {
+    .catch((err : Error , { res } : TContext) => {
 
       if(this._debug) {
         console.log(err)
@@ -179,58 +186,21 @@ class NfsServer extends NfsStudio {
         })
       }
      
-      if(this._monitors != null) {
+      this._utils.useHooks(() => {
+        if (this._monitors == null) return null;
+        return this._monitors({
+          host: process.env?.HOSTNAME ?? null,
+          cid: this._utils.getContainerId(),
+          ...this._utils.cpuAndMemoryUsage()
+        });
+      }, this._monitorsMs);
 
-        try {
-
-          const logCpuAndMemoryUsage = () => {
-
-            const memoryUsage = process.memoryUsage();
-  
-            const totalMemory = os.totalmem();
-  
-            const cpus = os.cpus();
-  
-            const usageData = cpus.map(cpu => {
-              const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
-              const active = total - cpu.times.idle;
-              return (active / total) * 100;
-            });
-        
-            const overallMax = Number(Number(Math.max(...usageData)).toFixed(4))
-            const overallMin = Number(Number(Math.min(...usageData)).toFixed(4))
-            const overallAvg = Number(Number(usageData.reduce((acc, usage) => acc + usage, 0) / usageData.length).toFixed(4))
-                
-            if(this._monitors != null) {
-
-              const toMB = (v : any) =>  Number(Number(v / 1024 / 1024).toFixed(4))
-
-              this._monitors({
-                host : process.env?.HOSTNAME == null ? null : String(process.env?.HOSTNAME),
-                memory:  {
-                  total     :toMB(totalMemory),
-                  heapTotal : toMB(memoryUsage.heapTotal),
-                  heapUsed  : toMB(memoryUsage.heapUsed),
-                  external  : toMB(memoryUsage.external),
-                  rss       : toMB(memoryUsage.rss)
-                } ,
-                cpu : {
-                  total : cpus.length,
-                  max   : overallMax,
-                  min   : overallMin,
-                  avg   : overallAvg,
-                  speed : cpus
-                  .map((cpu) => cpu.speed / 1000)
-                  .reduce((acc, usage) => acc + usage, 0) / cpus.length
-                }
-              })
-            }
-          }
-  
-          setInterval(logCpuAndMemoryUsage, 5_000)
-
-        } catch (e) {}
-      }
+      this._utils.useHooks(() => {
+        if (this._requestLog == null) return null;
+        const requests = [...this._requestLogData];
+        this._requestLogData = [];
+        return this._requestLog(requests);
+      }, this._requestLogMs);
 
       return callback == null ? null : callback({ port , server })
     })
