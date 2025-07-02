@@ -1,12 +1,12 @@
-import xml          from 'xml'
-import cron         from 'node-cron'
-import { Server }   from 'http'
+import xml              from 'xml'
+import cron             from 'node-cron'
+import { Server }       from 'http'
+import { NfsStudio }    from './server.studio'
 import { 
   type TContext, 
   Spear,
   Router
 } from 'tspace-spear'
-import { NfsStudio } from './server.studio'
 
 /**
  * The 'NfsServer' class is a created the server for nfs
@@ -39,7 +39,7 @@ class NfsServer extends NfsStudio {
     })
 
     this._app.useLogger({
-      exceptPath  : /\/benchmark(\/|$)|console|\/favicon\.ico(\/|$)/
+      exceptPath  : /\/benchmark(\/|$)|logs|\/favicon\.ico(\/|$)/
     })
 
     this._app.useBodyParser()
@@ -84,6 +84,7 @@ class NfsServer extends NfsStudio {
       this._router.groups('/studio' , (router) => {
         router.get('/' , this.studio)
         router.post('/api/login',this.studioLogin)
+        router.put('/api/meta-sync',this._authStudioMiddleware,this.studioMetaSync)
         router.get('/api/storage',this._authStudioMiddleware,this.studioStorage)
         router.get('/preview/*', this._authStudioMiddleware,this.studioPagePreview)
         router.get('/api/preview/*', this._authStudioMiddleware,this.studioPreviewText)
@@ -91,6 +92,7 @@ class NfsServer extends NfsStudio {
         router.delete('/api/logout',this._authStudioMiddleware,this.studioLogout)
         router.get('/api/buckets',this._authStudioMiddleware,this.studioBucket)
         router.post('/api/buckets',this._authStudioMiddleware,this.studioBucketCreate)
+        router.post('/api/folders', this._authStudioMiddleware,this.studioCreateFolder)
         router.get('/api/files/*',this._authStudioMiddleware,this.studioFiles)
         router.put('/api/files/*', this._authStudioMiddleware,this.studioEdit)
         router.delete('/api/files/*', this._authStudioMiddleware,this.studioRemove)
@@ -157,8 +159,8 @@ class NfsServer extends NfsStudio {
 
     this._app
     .catch((err : Error , { res } : TContext) => {
-
       if(this._debug) {
+       
         console.log(err)
       }
 

@@ -1,19 +1,31 @@
-import pathSystem   from "path";
-import fsSystem     from "fs";
-import fsExtra      from "fs-extra";
-import os           from 'os'
-import { Time }     from "tspace-utils";
+import pathSystem     from "path";
+import fsSystem       from "fs";
+import fsExtra        from "fs-extra";
+import os             from "os";
+import { Time }       from "tspace-utils";
+import { TResponse }  from "tspace-spear";
+import type { 
+  FileInfo, 
+  TMetadata 
+} from "../types";
 
 export class Utils {
-  private backup: number = 30;
+  private BACKUP: number = 30;
 
-  private lastCpuUsageCgroup: number | null = null;
-  private lastCpuTimestamp: number | null = null;
+  private LAST_CPU_USAGE_CGROUP: number | null = null;
+  private LAST_CPU_TIMESTAMP: number | null = null;
 
-  private CGROUP_MEM_CURR = '/sys/fs/cgroup/memory.current';
-  private CGROUP_MEM_MAX = '/sys/fs/cgroup/memory.max';
-  private CGROUP_CPU_STAT = '/sys/fs/cgroup/cpu.stat';
-  private ETC_HOSTNAME = '/etc/hostname';
+  private CGROUP_MEM_CURR = "/sys/fs/cgroup/memory.current";
+  private CGROUP_MEM_MAX = "/sys/fs/cgroup/memory.max";
+  private CGROUP_MEM_STAT = "/sys/fs/cgroup/memory.stat";
+  private CGROUP_CPU_STAT = "/sys/fs/cgroup/cpu.stat";
+  private ETC_HOSTNAME = "/etc/hostname";
+
+  private FILE_META_CACHE = new Map<
+    string,
+    { stat: fsSystem.Stats; cachedAt: number }
+  >();
+  private FILE_META_CACHE_TTL_MS = 1000 * 60 * 15;
 
   constructor(
     private buckets: Function | null,
@@ -32,59 +44,120 @@ export class Utils {
     return this;
   }
 
-  public useHooks(fn: (() => void | Promise<void> | null) | null, ms: number): () => void {
+  public useHooks(
+    fn: (() => void | Promise<void> | null) | null,
+    ms: number
+  ): () => void {
     if (!fn) return () => {};
 
     const interval = setInterval(() => {
       const result = fn();
-      if (result instanceof Promise) result.catch(() => {})
+      if (result instanceof Promise) result.catch(() => {});
     }, ms);
 
     return () => clearInterval(interval);
   }
 
-  public getContainerId = () => {
+  private async runConcurrent<T>(
+    tasks: (() => Promise<T>)[],
+    limit = 1000
+  ): Promise<T[]> {
+    const results: T[] = [];
+    let i = 0;
+
+    async function worker() {
+      while (i < tasks.length) {
+        const index = i++;
+        results[index] = await tasks[index]();
+      }
+    }
+
+    await Promise.all(Array(limit).fill(0).map(worker));
+    return results;
+  }
+
+  public async getFileStat(filePath: string): Promise<fsSystem.Stats | null> {
+    const now = new Time().toTimestamp();
+
+    if (this.FILE_META_CACHE.has(filePath)) {
+      const { stat, cachedAt } = this.FILE_META_CACHE.get(filePath)!;
+
+      if (now - cachedAt < this.FILE_META_CACHE_TTL_MS) {
+        return stat;
+      }
+      this.FILE_META_CACHE.delete(filePath);
+    }
+
     try {
-      return fsSystem.readFileSync(this.ETC_HOSTNAME, 'utf8').trim();
+      const stat = await fsSystem.promises.lstat(filePath);
+      this.FILE_META_CACHE.set(filePath, { stat, cachedAt: now });
+
+      return stat;
     } catch (err) {
       return null;
     }
   }
 
+  public getContainerId = () => {
+    try {
+      return fsSystem.readFileSync(this.ETC_HOSTNAME, "utf8").trim();
+    } catch (err) {
+      return null;
+    }
+  };
+
   public cpuAndMemoryUsage() {
-
-    const readRamUsageFromCgroup = (find : 'max' | 'current'): number | null => {
+    const readRamUsageFromCgroup = (find: "max" | "current"): number | null => {
       try {
-        const path = find === 'max' ? this.CGROUP_MEM_MAX : this.CGROUP_MEM_CURR
+        const cGroupPath =
+          find === "max" ? this.CGROUP_MEM_MAX : this.CGROUP_MEM_CURR;
 
-        const v = fsSystem.readFileSync(path, 'utf8');
-        if (v === 'max') return null;
-        return Number(v);
+        const usageRaw = fsSystem.readFileSync(cGroupPath, "utf8").trim();
 
-      } catch {
+        if (usageRaw === "max") return null;
+
+        const usage = parseInt(usageRaw, 10);
+
+        if (isNaN(usage)) return null;
+
+        if (find === "current") {
+          const statRaw = fsSystem.readFileSync(this.CGROUP_MEM_STAT, "utf8");
+          const inactiveFileLine = statRaw
+            .split("\n")
+            .find((line) => line.startsWith("inactive_file "));
+          const inactiveFile = inactiveFileLine
+            ? parseInt(inactiveFileLine.split(" ")[1], 10)
+            : 0;
+          return Math.max(0, usage - inactiveFile);
+        }
+
+        return usage;
+      } catch (err) {
         return null;
       }
-    }
+    };
 
     const readCpuUsageFromCgroup = (): number | null => {
       try {
-        const data = fsSystem.readFileSync(this.CGROUP_CPU_STAT, 'utf8');
+        const data = fsSystem.readFileSync(this.CGROUP_CPU_STAT, "utf8");
         const stat = Object.fromEntries(
           data
             .trim()
-            .split('\n')
-            .map(line => line.split(/\s+/).map((v, i) => (i === 1 ? Number(v) : v)))
+            .split("\n")
+            .map((line) =>
+              line.split(/\s+/).map((v, i) => (i === 1 ? Number(v) : v))
+            )
         );
         return stat.usage_usec || null;
       } catch {
         return null;
       }
-    }
+    };
 
-    const toMB = (v : number) =>  Number(Number(v / 1024 / 1024).toFixed(4));
+    const toMB = (v: number) => Number(Number(v / 1024 / 1024).toFixed(4));
 
-    let ramUsed: number | null  = readRamUsageFromCgroup('current')
-    let ramTotal: number | null = readRamUsageFromCgroup('max')
+    let ramUsed: number | null = readRamUsageFromCgroup("current");
+    let ramTotal: number | null = readRamUsageFromCgroup("max");
 
     if (!ramTotal || !ramUsed) {
       ramUsed = process.memoryUsage().rss;
@@ -98,44 +171,57 @@ export class Utils {
     let cpuUsedPercent: number = 0;
 
     if (cpuCgroupUsage !== null) {
-      if (this.lastCpuUsageCgroup === null || this.lastCpuTimestamp === null) {
-        this.lastCpuUsageCgroup = cpuCgroupUsage;
-        this.lastCpuTimestamp = now;
+      if (
+        this.LAST_CPU_USAGE_CGROUP === null ||
+        this.LAST_CPU_TIMESTAMP === null
+      ) {
+        this.LAST_CPU_USAGE_CGROUP = cpuCgroupUsage;
+
+        this.LAST_CPU_TIMESTAMP = now;
+
         cpuUsedPercent = 0;
       } else {
-        const deltaUsage = cpuCgroupUsage - this.lastCpuUsageCgroup;
-        const deltaTime = now - this.lastCpuTimestamp;
+        const deltaUsage = cpuCgroupUsage - this.LAST_CPU_USAGE_CGROUP;
 
-        this.lastCpuUsageCgroup = cpuCgroupUsage;
-        this.lastCpuTimestamp = now;
+        const deltaTime = now - this.LAST_CPU_TIMESTAMP;
+
+        this.LAST_CPU_USAGE_CGROUP = cpuCgroupUsage;
+
+        this.LAST_CPU_TIMESTAMP = now;
 
         const cpus = os.cpus().length;
+
         cpuUsedPercent = (deltaUsage / (deltaTime * 1000 * cpus)) * 100;
 
         if (cpuUsedPercent < 0) cpuUsedPercent = 0;
+
         if (cpuUsedPercent > 100) cpuUsedPercent = 100;
       }
     } else {
       const cpus = os.cpus();
-      const usageData = cpus.map(cpu => {
-        const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+
+      const usageData = cpus.map((cpu) => {
+        const total = Object.values(cpu.times).reduce(
+          (acc, time) => acc + time,
+          0
+        );
         const active = total - cpu.times.idle;
         return (active / total) * 100;
       });
 
-      cpuUsedPercent = usageData.reduce((acc, u) => acc + u, 0) / usageData.length || 0;
+      cpuUsedPercent =
+        usageData.reduce((acc, u) => acc + u, 0) / usageData.length || 0;
     }
 
     return {
+      time: new Date().toISOString(),
       ram: {
         total: toMB(ramTotal || 0),
         used: toMB(ramUsed || 0),
-        time: new Date().toISOString(),
       },
       cpu: {
         total: os.cpus().length,
-        used: Math.min(100,+cpuUsedPercent.toFixed(4)),
-        time: new Date().toISOString(),
+        used: Math.min(100, +cpuUsedPercent.toFixed(4)),
       },
     };
   }
@@ -196,7 +282,7 @@ export class Utils {
       return;
     });
 
-    await this.syncMetadata(bucket).catch(_ => null);
+    await this.syncMetadata(bucket).catch((_) => null);
 
     return;
   }
@@ -227,7 +313,7 @@ export class Utils {
     full?: boolean;
   }): string {
     path = path.replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "");
-    
+
     const normalized = full
       ? directory == null
         ? pathSystem.join(pathSystem.resolve(), `${path}`)
@@ -239,12 +325,14 @@ export class Utils {
     return normalized;
   }
 
-  public async makeStream({
+  public async pipeStream({
+    res,
     bucket,
     filePath,
     range,
     download = false,
   }: {
+    res: TResponse;
     bucket: string;
     filePath: string;
     range?: string;
@@ -258,7 +346,11 @@ export class Utils {
       String(filePath?.split(".")?.pop())
     );
 
-    const stat = fsSystem.statSync(path);
+    const stat = await this.getFileStat(path);
+
+    if (stat == null) {
+      throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+    }
 
     if (stat.isDirectory()) {
       throw new Error(`The stream is not support directory`);
@@ -266,95 +358,70 @@ export class Utils {
 
     const fileSize = stat.size;
 
-    const set = (header: Record<string, any>, filePath: string, code = 200) => {
+    const writeHead = (header: Record<string, any>, code = 200) => {
       const extension = filePath.split(".").pop();
+      const previews = Object.values({
+        video: [
+          "mp4", "webm", "ogg","ogv",
+          "avi","mov","mkv","flv","f4v",
+          "wmv","ts","mpeg",
+        ],
+        audio: ["wav", "mp3"],
+        document: ["pdf"],
+        image: ["png", "jpeg", "jpg", "gif", "webp", "svg", "ico"],
+      }).flat();
 
-      const previews = [
-        "ogv",
-        "ogg",
-        "webm",
-        "wav",
-        "mp3",
-        "mp4",
-        "pdf",
-        "png",
-        "jpeg",
-        "jpg",
-        "gif",
-        "webp",
-        "svg",
-        "ico",
-      ];
+      if (previews.some((p) => extension?.toLocaleLowerCase().includes(p))) {
+        res.writeHead(download ? code : 206, header);
+        return;
+      }
 
-      return (res: any) => {
-        if (previews.some((p) => extension?.toLocaleLowerCase() === p)) {
-          res.writeHead(download ? code : 206, header);
-
-          return;
-        }
-
-        if (download) {
-          res.setHeader(
-            "Content-Disposition",
-            `attachment; filename=${+new Date()}.${extension}`
-          );
-          res.setHeader("Content-Type", "application/octet-stream");
-        }
-      };
+      if (download) {
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename=${+new Date()}.${extension}`
+        );
+        res.setHeader("Content-Type", "application/octet-stream");
+      }
     };
 
-    if (contentType !== "video/mp4") {
+    const isVideo = contentType.startsWith("video/");
+
+    try {
+      if (!isVideo || range == null) {
+        const header = {
+          "Content-Length": fileSize,
+          "Content-Type": contentType,
+        };
+
+        const stream = fsSystem.createReadStream(path);
+
+        writeHead(header);
+
+        return stream;
+      }
+
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      const chunksize = end - start + 1;
+
+      const stream = fsSystem.createReadStream(path, { start, end });
+
       const header = {
-        "Content-Length": fileSize,
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunksize,
         "Content-Type": contentType,
       };
 
-      return {
-        stream: fsSystem.createReadStream(path),
-        header,
-        set: set(header, filePath),
-      };
+      writeHead(header, 206);
+
+      return stream;
+    } catch (err) {
+      throw err;
     }
-
-    if (range == null) {
-      const header = {
-        "Content-Length": fileSize,
-        "Content-Type": contentType,
-      };
-
-      return {
-        stream: fsSystem.createReadStream(path).on("error", (err) => {
-          throw err;
-        }),
-        header,
-        set: set(header, filePath),
-      };
-    }
-
-    const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-    const chunksize = end - start + 1;
-
-    const stream = fsSystem
-      .createReadStream(path, { start, end })
-      .on("error", (err) => {
-        throw err;
-      });
-
-    const header = {
-      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-      "Accept-Ranges": "bytes",
-      "Content-Length": chunksize,
-      "Content-Type": contentType,
-    };
-
-    return {
-      stream,
-      header,
-      set: set(header, filePath, 206),
-    };
   }
 
   public getContentType = (extension: string) => {
@@ -421,13 +488,13 @@ export class Utils {
     }
   };
 
-  public getMetadata = async (bucket: string) => {
+  public getMetadata = async (bucket: string): Promise<TMetadata | null> => {
     const directory: string = pathSystem.join(
       pathSystem.resolve(),
       `${this.rootFolder}/${bucket}/${this.metadata}`
     );
 
-    const checkMetadata: boolean = fsSystem.existsSync(directory);
+    const checkMetadata: boolean = await this.fileExists(directory);
 
     if (!checkMetadata) return null;
 
@@ -436,7 +503,7 @@ export class Utils {
       "utf-8"
     );
 
-    return this.safelyParseJSON(metadata);
+    return this.safelyParseJSON(metadata) as TMetadata | null;
   };
 
   public async trashedWithFolder({
@@ -464,24 +531,18 @@ export class Utils {
       });
     }
 
-    await fsExtra
-      .copy(currentPath, newPath)
-      .then((_) => {
-        fsSystem.rmSync(currentPath, { recursive: true, force: true });
-      })
-      .catch((err) => {
-        console.log(err);
-        return;
-      });
+    await fsExtra.copy(currentPath, newPath).catch((err) => console.log(err));
 
-    await this.syncMetadata(bucket).catch(_ => null);
+    await fsSystem.promises.rm(currentPath, { recursive: true, force: true });
+
+    await this.syncMetadata(bucket).catch((_) => null);
 
     return;
   }
 
   public async fileExists(path: string): Promise<boolean> {
     try {
-      await fsSystem.promises.stat(path);
+      await fsSystem.promises.access(path);
       return true;
     } catch (err) {
       return false;
@@ -491,20 +552,20 @@ export class Utils {
   public removeOldDirInTrash = async (bucket: string) => {
     const directory = this.normalizeDirectory({ bucket, folder: this.trash });
 
-    const files = fsSystem.readdirSync(directory);
+    const files = await fsSystem.promises.readdir(directory);
 
     for (const file of files) {
       const dir = this.normalizePath({ directory, path: file, full: true });
 
-      const stats = await fsSystem.promises.stat(dir);
+      const stats = await this.getFileStat(dir);
 
-      if (!stats.isDirectory()) continue;
+      if (!stats?.isDirectory()) continue;
 
       const format = file.match(/^\d{4}-\d{2}-\d{2}/);
 
       const folderDate = new Time(format ? format[0] : 0).toTimestamp();
 
-      const ago = new Time().minusDays(this.backup).toTimeStamp();
+      const ago = new Time().minusDays(this.BACKUP).toTimeStamp();
 
       if (Number.isNaN(folderDate) || folderDate > ago) continue;
 
@@ -512,95 +573,157 @@ export class Utils {
     }
   };
 
-  public syncMetadata = async (syncBuckets: string = "*") => {
-    const rootFolder = this.rootFolder;
-    const buckets =
-      this.buckets == null
-        ? fsSystem
-            .readdirSync(pathSystem.join(pathSystem.resolve(), rootFolder))
-            .filter((name) => {
-              return fsSystem
-                .statSync(pathSystem.join(rootFolder, name))
-                .isDirectory();
+  public syncMetadata = async (syncBuckets: string = "*"): Promise<void> => {
+    try {
+      const rootFolder = this.rootFolder;
+      const buckets =
+        this.buckets == null
+          ? (
+              await fsSystem.promises.readdir(
+                pathSystem.join(pathSystem.resolve(), rootFolder)
+              )
+            ).filter(async (name) => {
+              const stats = await this.getFileStat(
+                pathSystem.join(rootFolder, name)
+              );
+              return stats?.isDirectory() ?? false;
             })
-        : await this.buckets();
+          : await this.buckets();
 
-    const analyzeDirectory = async (dirPath: string) => {
-      let fileCount = 0;
-      let folderCount = 0;
-      let totalSize = 0;
+      const analyzeDirectory = async (dirPath: string) => {
+        const info = {
+          normal: {
+            folderCount: 0,
+            fileCount: 0,
+            totalSize: 0,
+          },
+          trash: {
+            folderCount: 0,
+            fileCount: 0,
+            totalSize: 0,
+          },
+        };
 
-      const traverseDirectory = async (currentPath: string) => {
-        const items = await fsSystem.promises
-          .readdir(currentPath)
-          .catch((_) => []);
+        const traverseDirectory = async (currentPath: string) => {
+          const items = await fsSystem.promises
+            .readdir(currentPath)
+            .catch((_) => []);
 
-        for (const item of items) {
-          const itemPath = pathSystem.join(currentPath, item);
-          const stats = await fsSystem.promises
-            .stat(itemPath)
-            .catch((_) => null);
+          for (const item of items) {
+            const itemPath = pathSystem.join(currentPath, item);
+            const stat = await this.getFileStat(itemPath);
 
-          if (stats == null) continue;
+            if (stat == null) continue;
 
-          if (stats.isDirectory() && item === this.trash) {
-            continue;
+            if (stat.isDirectory() && itemPath.includes(this.trash)) {
+              info.trash.folderCount++;
+              await traverseDirectory(itemPath);
+              continue;
+            }
+
+            if (
+              stat.isFile() &&
+              itemPath.includes(this.trash) &&
+              item !== this.metadata
+            ) {
+              info.trash.fileCount++;
+              info.trash.totalSize += stat.size;
+              continue;
+            }
+
+            if (stat.isDirectory()) {
+              info.normal.folderCount++;
+              await traverseDirectory(itemPath);
+            }
+
+            if (stat.isFile() && item !== this.metadata) {
+              info.normal.fileCount++;
+              info.normal.totalSize += stat.size;
+            }
           }
+        };
 
-          if (stats.isDirectory()) {
-            folderCount++;
-            await traverseDirectory(itemPath);
-          }
+        await traverseDirectory(pathSystem.join(dirPath));
 
-          if (stats.isFile() && item !== this.metadata) {
-            fileCount++;
-            totalSize += stats.size;
-          }
-        }
+        return info;
       };
 
-      await traverseDirectory(pathSystem.join(dirPath));
+      for (const bucket of buckets) {
+        if (syncBuckets === "*" || syncBuckets === bucket) {
+          const targetDir = `${rootFolder}/${bucket}`;
 
-      return { fileCount, folderCount, totalSize };
-    };
+          const result = await analyzeDirectory(targetDir);
 
-    for (const bucket of buckets) {
-      if (syncBuckets === "*" || syncBuckets === bucket) {
-        const targetDir = `${rootFolder}/${bucket}`;
-
-        const result = await analyzeDirectory(targetDir);
-
-        // write file metadata to bucket
-        fsSystem.writeFileSync(
-          `${targetDir}/${this.metadata}`,
-          JSON.stringify(
-            {
-              bucket,
-              info: {
-                files: result.fileCount,
-                folders: result.folderCount,
-                size: result.totalSize,
-                sizes: {
-                  bytes: result.totalSize,
-                  kb: result.totalSize / 1024,
-                  mb: result.totalSize / (1024 * 1024),
-                  gb: result.totalSize / (1024 * 1024 * 1024),
+          // write file metadata to bucket
+          await fsSystem.promises.writeFile(
+            `${targetDir}/${this.metadata}`,
+            JSON.stringify(
+              {
+                bucket,
+                lastModified: new Date().toISOString(),
+                info: {
+                  files: result.normal.fileCount + result.trash.fileCount,
+                  folders: result.normal.folderCount + result.trash.folderCount,
+                  size: result.normal.totalSize + result.trash.totalSize,
+                  sizes: {
+                    bytes: result.normal.totalSize + result.trash.totalSize,
+                    kb:
+                      (result.normal.totalSize + result.trash.totalSize) / 1024,
+                    mb:
+                      (result.normal.totalSize + result.trash.totalSize) /
+                      (1024 * 1024),
+                    gb:
+                      (result.normal.totalSize + result.trash.totalSize) /
+                      (1024 * 1024 * 1024),
+                  },
+                },
+                normal: {
+                  files: result.normal.fileCount,
+                  folders: result.normal.folderCount,
+                  size: result.normal.totalSize,
+                  sizes: {
+                    bytes: result.normal.totalSize,
+                    kb: result.normal.totalSize / 1024,
+                    mb: result.normal.totalSize / (1024 * 1024),
+                    gb: result.normal.totalSize / (1024 * 1024 * 1024),
+                  },
+                },
+                trash: {
+                  files: result.trash.fileCount,
+                  folders: result.trash.folderCount,
+                  size: result.trash.totalSize,
+                  sizes: {
+                    bytes: result.trash.totalSize,
+                    kb: result.trash.totalSize / 1024,
+                    mb: result.trash.totalSize / (1024 * 1024),
+                    gb: result.trash.totalSize / (1024 * 1024 * 1024),
+                  },
                 },
               },
-            },
-            null,
-            2
-          ),
-          "utf-8"
-        );
+              null,
+              2
+            ),
+            "utf-8"
+          );
+        }
       }
+
+      return;
+    } catch (err) {
+      return;
     }
   };
 
   public async files(
     dir: string,
-    { ignore = null }: { ignore?: string | null } = {}
-  ) {
+    {
+      ignoreFolders = [],
+      ignoreFiles = [],
+    }: {
+      ignoreFolders?: string[];
+      ignoreFiles?: string[];
+    } = {}
+  ): Promise<string[]> {
     const directories = await fsSystem.promises
       .readdir(dir, { withFileTypes: true })
       .catch((_) => []);
@@ -611,8 +734,14 @@ export class Utils {
 
         if (
           directory.isDirectory() &&
-          ignore != null &&
-          directory.name === ignore
+          ignoreFolders.some((v) => v === directory.name)
+        ) {
+          return null;
+        }
+
+        if (
+          directory.isFile() &&
+          ignoreFiles.some((v) => v === directory.name)
         ) {
           return null;
         }
@@ -624,54 +753,113 @@ export class Utils {
     return [].concat(...files.filter(Boolean));
   }
 
+  // public async fileStructure(
+  //   dirPath: string,
+  //   { includeFiles = false }: { includeFiles?: boolean } = {}
+  // ): Promise<FileInfo[]> {
+  //   const files = await fsSystem.promises.readdir(dirPath).catch(() => []);
+  //   const rootLen = this.rootFolder.length + 1;
+
+  //   const tasks = files.flatMap((file) => {
+  //     if (file === this.metadata) return [];
+
+  //     return [async () => {
+  //       const fullPath = pathSystem.join(dirPath, file);
+  //       const stats = await this.getFileStat(fullPath);
+  //       if (!stats) return null;
+
+  //       const isFolder = stats.isDirectory();
+  //       if (!includeFiles && !isFolder) return null;
+
+  //       const normalizedPath = fullPath.replace(/\\/g, '/').slice(rootLen);
+  //       const isProtected = isFolder && file.includes(this.trash);
+
+  //       return {
+  //         name: file,
+  //         path: normalizedPath,
+  //         isFolder,
+  //         lastModified: stats.mtime,
+  //         size: isFolder ? null : stats.size,
+  //         extension: isFolder
+  //           ? isProtected ? 'system' : 'folder'
+  //           : pathSystem.extname(file).replace(/^\./, '') || 'unknown',
+  //         protected: isProtected,
+  //       };
+  //     }];
+  //   });
+
+  //   const results = await this.runConcurrent(tasks, 300);
+  //   return results.filter((v): v is FileInfo => v !== null);
+  // }
+
   public fileStructure = async (
     dirPath: string,
-    { includeFiles = false, bucket }: { includeFiles?: boolean; bucket: string }
-  ): Promise<any[]> => {
-    const items: any[] = [];
+    {
+      includeFiles = false,
+    }: {
+      includeFiles?: boolean;
+    } = {}
+  ): Promise<FileInfo[]> => {
+    const files = await fsSystem.promises.readdir(dirPath).catch(() => []);
 
-    const files = await fsSystem.promises.readdir(dirPath).catch((_) => []);
+    const tasks = files.map((file) => {
+      return async () => {
+        if (file === this.metadata) return null;
 
-    for (const file of files) {
-      if (file === this.metadata) continue;
+        const fullPath = pathSystem.join(dirPath, file);
 
-      const path = pathSystem.join(dirPath, file);
+        const stats = await this.getFileStat(fullPath);
 
-      const fullPath = pathSystem.join(pathSystem.resolve(), dirPath, file);
+        if (!stats) return null;
 
-      const stats = await fsSystem.promises.lstat(fullPath).catch((_) => null);
+        const isFolder = stats.isDirectory();
 
-      if (stats == null) continue;
+        if (!includeFiles && !isFolder) return null;
 
-      const lastModified = stats.mtime;
+        const normalizedPath = fullPath
+          .replace(/\\/g, "/")
+          .replace(`${this.rootFolder}/`, "");
+        const isProtected = isFolder && file.includes(this.trash);
 
-      if (stats?.isDirectory()) {
-        items.push({
+        return {
           name: file,
-          path: path.replace(/\\/g, "/").replace(`${this.rootFolder}/`, ""),
-          isFolder: true,
-          lastModified,
-          size: null,
-          extension: "folder",
-        });
+          path: normalizedPath,
+          isFolder,
+          lastModified: stats.mtime,
+          size: isFolder ? null : stats.size,
+          extension: isFolder
+            ? isProtected
+              ? "system"
+              : "folder"
+            : pathSystem.extname(file).replace(/^\./, ""),
+          protected: isProtected,
+        };
+      };
+    });
 
-        continue;
-      }
+    const results = await Promise.all(tasks.map((fn) => fn()));
 
-      if (!includeFiles) continue;
+    return results.filter((v): v is FileInfo => v !== null);
+  };
 
-      const extension = pathSystem.extname(file).replace(/\./g, "");
+  public getFolders = async (dir: string, base = dir): Promise<string[]> => {
+    const items = await fsSystem.promises.readdir(dir);
 
-      items.push({
-        name: file,
-        path: path.replace(/\\/g, "/").replace(this.rootFolder, ""),
-        isFolder: false,
-        lastModified,
-        size: stats.size,
-        extension,
-      });
-    }
+    const promises = items.map((item) => {
+      return async () => {
+        const fullPath = pathSystem.join(dir, item);
+        const stat = await this.getFileStat(fullPath);
 
-    return items;
+        if (!stat?.isDirectory() || item === this.trash) return [];
+
+        const relativePath = pathSystem.relative(base, fullPath);
+        const nested = await this.getFolders(fullPath, base);
+        return [relativePath, ...nested];
+      };
+    });
+
+    const folders = await Promise.all(promises.map((fn) => fn()));
+
+    return folders.flat().map((v) => v.replace(/\\/g, "/"));
   };
 }

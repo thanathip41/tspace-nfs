@@ -29,15 +29,15 @@ export type TMeta = {
 export type TMonitors = { 
   host : string | null; 
   cid  : string | null;
+  time: string; 
   ram: {
     total: number;
     used : number;
-    time: string; 
+   
   };
   cpu: {
     total: number;
     used : number;
-    time: string; 
   };
 }
 
@@ -67,3 +67,51 @@ export type TLoadRequestLog = {
   bucket: string;
   count: number;
 }
+
+export type TMetadata = {
+  bucket: string;
+  lastModified: string;
+  info: {
+    files: number;
+    folders: number;
+    size: number;
+    sizes: {
+      bytes: number;
+      kb : number;
+      mb : number;
+      gb :number;
+    }
+  },
+  normal: {
+    files: number;
+    folders: number;
+    size: number;
+    sizes: {
+      bytes: number;
+      kb : number;
+      mb : number;
+      gb :number;
+    }
+  },
+  trash: {
+    files: number;
+    folders: number;
+    size: number;
+    sizes: {
+      bytes: number;
+      kb : number;
+      mb : number;
+      gb :number;
+    }
+  }
+}
+
+export type FileInfo = {
+  name: string;
+  path: string;
+  isFolder: boolean;
+  lastModified: Date;
+  size: number | null;
+  extension: string;
+  protected: boolean;
+};

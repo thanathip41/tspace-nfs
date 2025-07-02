@@ -33,6 +33,11 @@
       align-items: center;
       z-index: 9999;
     }
+    .bucket-selected {
+      background-color: rgb(75, 139, 243);
+      border-radius: 6px;
+      margin: 0 -6px;
+    }
   </style>
 </head>
 <body class="bg-gray-300 dark:bg-gray-900">
@@ -59,16 +64,19 @@
 
       <div class="relative">
         <button onclick="toggleDropdown()" class="focus:outline-none bg-gray-100 dark:bg-gray-800  rounded-full  ">
-          <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl select-none
-                text-black dark:text-white dark:bg-gray-700"
-            >
+          <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl 
+            select-none text-black dark:text-white dark:bg-gray-700"
+          >
             {{auth.username}}
           </div>
 
         </button>
 
-        <div id="dropdownMenu" class="absolute right-0 mt-2 w-40 bg-white rounded shadow-lg z-50 hidden dark:bg-gray-800">
-          <a href="/studio/dashboard" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Dashboard</a>
+        <div id="dropdownMenu" 
+          class="absolute right-0 mt-2 w-40 bg-white rounded shadow-lg z-50 hidden dark:bg-gray-800">
+          <a href="/studio/dashboard" target="_blank" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">
+            Dashboard
+          </a>
           <a href="javascript:void(0)" id="logout" class="flex items-center gap-1 px-2 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700">
             <b> Sign out </b>
           </a>
@@ -119,9 +127,12 @@
                 </span>
               </div>
               
-              <div class="flex flex-wrap items-center gap-2 sm:gap-3 justify-end">
+              <div class="flex items-center gap-2 sm:gap-3 justify-start xl:justify-end">
                
-                <span class="font-semibold text-gray-800 dark:text-gray-200 w-full sm:w-auto text-center" id="currentFiles"></span>
+                <span
+                  class="font-semibold text-gray-800 dark:text-gray-200 w-full sm:w-auto block sm:inline text-xs sm:text-base sm:text-left"
+                  id="currentFiles"
+                ></span>
 
                 <div class="relative">
                   <svg 
@@ -139,10 +150,14 @@
                   </span>
                 </div>
 
-                <svg  id="delete"  class="cursor-pointer red-500 w-6 h-6 text-gray-800 dark:text-white" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 7h14m-9 3v8m4-8v8M10 3h4a1 1 0 0 1 1 1v3H9V4a1 1 0 0 1 1-1ZM6 7h12v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7Z"/>
-                </svg>
-
+                <div class="relative">
+                  <svg  id="delete"  class="cursor-pointer red-500 w-6 h-6 text-gray-800 dark:text-white" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 7h14m-9 3v8m4-8v8M10 3h4a1 1 0 0 1 1 1v3H9V4a1 1 0 0 1 1-1ZM6 7h12v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7Z"/>
+                  </svg>
+                  <span id="delete-count" class="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[12px] rounded-full px-1 py-[1px] leading-none">
+                    0
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -202,7 +217,33 @@
             </div>
             
           </div>
+
+          <div 
+            id="createFolderBtn" 
+            class="fixed bottom-20 right-4 z-50 bg-gray-800 text-white p-3 rounded-full shadow cursor-pointer
+            hover:bg-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-gray-300"
+          >
+
+            <svg class="w-8 h-8 dark:text-gray-800 text-white" width="24" height="24" fill="none" viewBox="0 0 24 24">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 8H4m8 3.5v5M9.5 14h5M4 6v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"/>
+            </svg>
+
+          </div>
+          
+          <div 
+            id="uploadBtn" 
+            class="fixed bottom-4 right-4 z-50 bg-gray-800 text-white p-3 rounded-full shadow cursor-pointer
+            hover:bg-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-gray-300"
+          >
+            <svg class="w-8 h-8 dark:text-gray-800 :text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M12 3a1 1 0 0 1 .78.375l4 5a1 1 0 1 1-1.56 1.25L13 6.85V14a1 1 0 1 1-2 0V6.85L8.78 9.626a1 1 0 1 1-1.56-1.25l4-5A1 1 0 0 1 12 3ZM9 14v-1H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-4v1a3 3 0 1 1-6 0Zm8 2a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H17Z" clip-rule="evenodd"/>
+            </svg>
+
+            <input type="file" id="fileInput" class="hidden" multiple />
+          </div>
+
         </div>
+
       </div>
     </div>
   
@@ -234,9 +275,12 @@
   </div>
 
   <div id="removeModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
       <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Remove</h3>
-      <p class="mb-6 text-gray-600 dark:text-gray-300">Are you sure you want to remove this file?</p>
+      <p class="mb-6 text-gray-600 dark:text-gray-300">
+        <span id="removeMessage"> </span>
+      </p>
+
       <div class="flex justify-end space-x-4">
         <button id="removeYesBtnModal" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Ok</button>
         <button id="removeNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">Cancel</button>
@@ -245,7 +289,7 @@
   </div>
 
   <div id="removesModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
       <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Remove</h3>
       <p class="mb-6 text-gray-600 dark:text-gray-300">
         <span id="removesCountModal"> </span>
@@ -258,7 +302,7 @@
   </div>
 
   <div id="editModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
       <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Rename</h3>
       <div class="mb-6">
         <label for="rename" class="block text-sm font-medium text-gray-700 dark:text-gray-300">name</label>
@@ -272,7 +316,7 @@
   </div>
 
   <div id="bucketModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm dark:bg-gray-800">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
       <form id="bucketYesBtnModal" class="space-y-6" novalidate>
         <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Create Bucket</h3>
         <div class="mb-6">
@@ -295,13 +339,26 @@
       </form>
     </div>
   </div>
+
+  <div id="createFolderModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
+      <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Create new Folder</h3>
+      <div class="mb-6">
+        <label for="createFolder" class="block text-sm font-medium text-gray-700 dark:text-gray-300">folder name</label>
+        <input id="createFolder" name="createFolder" required class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div class="flex justify-end space-x-4">
+        <button id="createFolderYesBtnModal" class="px-4 py-2 bg-gray-500 dark:bg-gray-900 text-gray-800 dark:text-white rounded-md">Ok</button>
+        <button id="createFolderNoBtnModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-md text-gray-800 dark:text-white">Cancel</button>
+      </div>
+    </div>
+  </div>
   
 </body>
-
 <script>
 
   const $query = (element) => document.querySelector(element);
-  const $$query = (element) => document.querySelectorAll(element);
+  const $queryAll = (element) => document.querySelectorAll(element);
 
   const $state = {
     data : {
@@ -318,7 +375,7 @@
     el : {
       currentFiles          : $query('#currentFiles'),
       filesSelectdAll       : $query('#filesSelectdAll'),
-      filesSelectd          : $$query('.filesSelectd'),
+      filesSelectd          : $queryAll('.filesSelectd'),
       removeModal           : $query('#removeModal'),
       removeYesBtnModal     : $query('#removeYesBtnModal'),
       removeNoBtnModal      : $query('#removeNoBtnModal'),
@@ -355,8 +412,17 @@
       download              : $query('#download'),
       delete                : $query('#delete'),
       downloadCount         : $query('#download-count'),
-      bucketToggle          : $$query('.bucket-toggle'),
-      folderToggle          : $$query('.folder-toggle')
+      deleteCount           : $query('#delete-count'),
+      bucketToggle          : $queryAll('.bucket-toggle'),
+      folderToggle          : $queryAll('.folder-toggle'),
+      uploadBtn             : $query('#uploadBtn'),
+      fileInput             : $query('#fileInput'),
+      removeMessage         : $query('#removeMessage'),
+      createFolderModal     : $query('#createFolderModal'),
+      createFolderBtn       : $query('#createFolderBtn'),
+      createFolder          : $query('#createFolder'),
+      createFolderYesBtnModal : $query('#createFolderYesBtnModal'),
+      createFolderNoBtnModal  : $query('#createFolderNoBtnModal'),
     }
   }
 
@@ -454,6 +520,12 @@
     }
 
     showTable();
+    const row = buildFileRow(file);
+    $state.el.fileTableBody.appendChild(row);
+  };
+
+
+  function buildFileRow (file) {
 
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -463,13 +535,25 @@
             ? `
             <label class="flex cursor-pointer">
               <input type="checkbox" class="filesSelected hidden peer" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
-              <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 8H4m0-2v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"/>
-              </svg>
-              <div class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" target="${file.path}" value="${file.name}" 
+              ${file.protected
+                ? `
+                <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 7h14m-9 3v8m4-8v8M10 3h4a1 1 0 0 1 1 1v3H9V4a1 1 0 0 1 1-1ZM6 7h12v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7Z"/>
+                </svg>
+                `
+                : `
+                 <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 8H4m0-2v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"/>
+                  </svg>
+                `
+              }
+             
+              <div 
+                class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" 
+                target="${file.path}" value="${file.name}" 
                 onclick="onFileSelected(event)" ondblclick="onLoadFile(event)"
               > 
-                ${file.name} 
+                <b class="text-xs xl:text-base break-words truncate min-w-0">${file.name}</b>
               </div>
             </label>
             `
@@ -482,53 +566,53 @@
               <div class="pl-1 cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-500" target="${file.path}" value="${file.name}" 4
                 onclick="onFileSelected(event)" ondblclick="onPreview(event)"
               > 
-                ${file.name} 
+                <span class="text-xs xl:text-base break-words truncate min-w-0">${file.name}</span>
               </div>
             </label>
            `
           }
         </div>
       </td>
-      <td class="px-4 py-2">${file.size != null ? formatSize(file.size) : '-'} </td>
-      <td class="px-4 py-2">${file.isFolder ? 'folder' : file.extension === '' || file.extension == null ? 'file' : file.extension}</td>
-      <td class="px-4 py-2">${covertDate(file.lastModified)}</td>
+      <td class="px-4 py-2"><span class="text-xs xl:text-base break-words truncate min-w-0"> ${file.size != null ? formatSize(file.size) : '-'} </span> </td>
+      <td class="px-4 py-2"><span class="text-xs xl:text-base break-words truncate min-w-0">${file.extension}</span> </td>
+      <td class="px-4 py-2"><span class="text-xs xl:text-base break-words truncate min-w-0">${covertDate(file.lastModified)}</span> </td>
       <td class="flex gap-3 px-4 py-2">
          
-          <svg target="${file.path}" onclick="${file.isFolder ? 'onLoadFile(event)' : 'onPreview(event)'}"} 
-            class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
+        <svg target="${file.path}" onclick="${file.isFolder ? 'onLoadFile(event)' : 'onPreview(event)'}"} 
+          class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+          <path fill-rule="evenodd" d="M4.998 7.78C6.729 6.345 9.198 5 12 5c2.802 0 5.27 1.345 7.002 2.78a12.713 12.713 0 0 1 2.096 2.183c.253.344.465.682.618.997.14.286.284.658.284 1.04s-.145.754-.284 1.04a6.6 6.6 0 0 1-.618.997 12.712 12.712 0 0 1-2.096 2.183C17.271 17.655 14.802 19 12 19c-2.802 0-5.27-1.345-7.002-2.78a12.712 12.712 0 0 1-2.096-2.183 6.6 6.6 0 0 1-.618-.997C2.144 12.754 2 12.382 2 12s.145-.754.284-1.04c.153-.315.365-.653.618-.997A12.714 12.714 0 0 1 4.998 7.78ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/>
+        </svg>
+
+        ${file.isFolder
+        ? ""
+        :`
+          <svg target="${file.path}" onclick="onShared(event)"
+            class="cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17.5 3a3.5 3.5 0 0 0-3.456 4.06L8.143 9.704a3.5 3.5 0 1 0-.01 4.6l5.91 2.65a3.5 3.5 0 1 0 .863-1.805l-5.94-2.662a3.53 3.53 0 0 0 .002-.961l5.948-2.667A3.5 3.5 0 1 0 17.5 3Z"/>
           </svg>
+          `
+        }
 
-
-          ${file.isFolder
-          ?`
-            <svg target="${file.path}"
-              class="cursor-not-allowed hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M17.5 3a3.5 3.5 0 0 0-3.456 4.06L8.143 9.704a3.5 3.5 0 1 0-.01 4.6l5.91 2.65a3.5 3.5 0 1 0 .863-1.805l-5.94-2.662a3.53 3.53 0 0 0 .002-.961l5.948-2.667A3.5 3.5 0 1 0 17.5 3Z"/>
-            </svg>
-            `
-            :`
-            <svg target="${file.path}" onclick="onShared(event)"
-              class="cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M17.5 3a3.5 3.5 0 0 0-3.456 4.06L8.143 9.704a3.5 3.5 0 1 0-.01 4.6l5.91 2.65a3.5 3.5 0 1 0 .863-1.805l-5.94-2.662a3.53 3.53 0 0 0 .002-.961l5.948-2.667A3.5 3.5 0 1 0 17.5 3Z"/>
-            </svg>
-            `
-          }
-          
+        ${file.isFolder && file.protected
+        ? ""
+        : `
           <svg target="${file.path}" onclick="onEdit(event)"} 
             class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M11.32 6.176H5c-1.105 0-2 .949-2 2.118v10.588C3 20.052 3.895 21 5 21h11c1.105 0 2-.948 2-2.118v-7.75l-3.914 4.144A2.46 2.46 0 0 1 12.81 16l-2.681.568c-1.75.37-3.292-1.263-2.942-3.115l.536-2.839c.097-.512.335-.983.684-1.352l2.914-3.086Z" clip-rule="evenodd"/>
             <path fill-rule="evenodd" d="M19.846 4.318a2.148 2.148 0 0 0-.437-.692 2.014 2.014 0 0 0-.654-.463 1.92 1.92 0 0 0-1.544 0 2.014 2.014 0 0 0-.654.463l-.546.578 2.852 3.02.546-.579a2.14 2.14 0 0 0 .437-.692 2.244 2.244 0 0 0 0-1.635ZM17.45 8.721 14.597 5.7 9.82 10.76a.54.54 0 0 0-.137.27l-.536 2.84c-.07.37.239.696.588.622l2.682-.567a.492.492 0 0 0 .255-.145l4.778-5.06Z" clip-rule="evenodd"/>
           </svg>
 
-          <svg target="${file.path}" onclick="onRemove(event)" } 
+          <svg target="${file.path}" onclick="onRemove(event)" 
             class="w-5 h-5 cursor-pointer hover:scale-150 text-gray-800 dark:text-white" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
             <path fill-rule="evenodd" d="M8.586 2.586A2 2 0 0 1 10 2h4a2 2 0 0 1 2 2v2h3a1 1 0 1 1 0 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a1 1 0 0 1 0-2h3V4a2 2 0 0 1 .586-1.414ZM10 6h4V4h-4v2Zm1 4a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Zm4 0a1 1 0 1 0-2 0v8a1 1 0 1 0 2 0v-8Z" clip-rule="evenodd"/>
           </svg>
+        `}
+
       </td>
     `;
-    $state.el.fileTableBody.appendChild(row);
-  };
+
+    return row
+  }
 
   async function sortTable() {
     showLoading();
@@ -651,61 +735,60 @@
     
   }
 
- 
-  async function fetchUploadFile(file, path) {
+  async function fetchUploadFile({file, path}) {
     return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${$state.data.url}/studio/api/upload`, true);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${$state.data.url}/studio/api/upload`, true);
 
-        let lastTime = Date.now();
-        let lastLoaded = 0;
+      let lastTime = Date.now();
+      let lastLoaded = 0;
 
-        xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-                const progress = ((e.loaded / e.total) * 100).toFixed(2);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const progress = ((e.loaded / e.total) * 100).toFixed(2);
 
-                const currentTime = Date.now();
-                const elapsedTime = (currentTime - lastTime) / 1000;
-                const bytesUploaded = e.loaded - lastLoaded;
+            const currentTime = Date.now();
+            const elapsedTime = (currentTime - lastTime) / 1000;
+            const bytesUploaded = e.loaded - lastLoaded;
 
-                const uploadSpeed = (bytesUploaded) / elapsedTime;
+            const uploadSpeed = (bytesUploaded) / elapsedTime;
 
-                updateFileProgress({
-                  file : {
-                    name: file.name,
-                    size: file.size,
-                    extension: String(file.name)?.split('.').pop(),
-                    lastModified: covertDate(),
-                    directory: path.replace(`/${file.name}`, ''),
-                    path : [path , file.name].join('/')
-                  },
-                  progress : +progress,
-                  uploadSpeed: uploadSpeed.toFixed(4)
-                });
-                
+            updateFileProgress({
+              file : {
+                name: file.name,
+                size: file.size,
+                extension: String(file.name)?.split('.').pop(),
+                lastModified: covertDate(),
+                directory: path.replace(`/${file.name}`, ''),
+                path : [path , file.name].join('/')
+              },
+              progress : +progress,
+              uploadSpeed: uploadSpeed.toFixed(4)
+            });
+            
 
-                lastTime = currentTime;
-                lastLoaded = e.loaded;
-            }
-        };
+            lastTime = currentTime;
+            lastLoaded = e.loaded;
+        }
+      };
 
-        xhr.onload = async () => {
-            if (xhr.status === 200) {
-                notify({ type: 'success', message: `The file '${file.name}' has been uploaded.` });
-                return resolve(true);
-            }
-            return reject(new Error(`Upload failed with status ${xhr.status}`));
-        };
+      xhr.onload = async () => {
+        if (xhr.status === 200) {
+            notify({ type: 'success', message: `The file '${file.name}' has been uploaded.` });
+            return resolve(true);
+        }
+        return reject(new Error(`Upload failed with status ${xhr.status}`));
+      };
 
-        xhr.onerror = () => {
-            notify({ type: 'error', message: `The file '${file.name}' has failed to upload.` });
-            reject(new Error(`Network error during upload`));
-        };
+      xhr.onerror = () => {
+        notify({ type: 'error', message: `The file '${file.name}' has failed to upload.` });
+        reject(new Error(`Network error during upload`));
+      };
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append('path', path);
-        xhr.send(formData);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append('path', path);
+      xhr.send(formData);
     });
   }
 
@@ -733,28 +816,39 @@
 
     const res = await response.json();
 
-    const files = res.files;
-
-    $state.data.files = files.map(file => ({...file , selected : false }))
+    const rawFiles = Array.isArray(res.files) ? res.files : [];
+    const files = rawFiles.map(file => ({ ...file, selected: false }));
+    $state.data.files = [];
 
     setTableFiles()
 
     await sleep(300)
 
     showTable();
+  
+    const batchSize = Math.floor(Math.random() * (999 - 500 + 1)) + 500;
+    const delay = 100;
 
-    for(const file of files) {
-      addFileToTable(file);
+    for (let i = 0; i < files.length; i += batchSize) {
+      const fragment = document.createDocumentFragment();
+      const batch = files.slice(i, i + batchSize);
+
+      for (const file of batch) {
+        fragment.appendChild(buildFileRow(file));
+      }
+
+      $state.el.fileTableBody.appendChild(fragment);
+      $state.data.files.push(...batch);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      currentTotalFiles();
     }
 
-    themeToggleMode()
+    themeToggleMode();
 
-    currentTotalFiles()
-
-    hideLoading()
+    hideLoading();
     
-    let link = []
-    let currentTarget = []
+    let link = [];
+    let currentTarget = [];
     for(const t of target.split('/')) {
       currentTarget.push(t);
       link.push(`<button class="text-blue-500" target="${currentTarget.join('/')}" onclick="onLoadFile(event)"> ${t} </button>`);
@@ -763,7 +857,22 @@
     $state.el.currentPath.innerHTML = link.join(' / ');
     $state.data.path.selected = target;
 
-    localStorage.setItem('lastPathDirectory', target)
+    localStorage.setItem('lastPathDirectory', target);
+  }
+
+  async function fetchMetaSync(target) {
+      try {
+          
+        await fetch(`${$state.data.url}/studio/api/meta-sync`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path: target }),
+        });
+      } catch (error) {
+          hideLoading()
+      }
   }
 
   async function fetchBucket() {
@@ -872,7 +981,7 @@
         })
       })
       .catch(err => {
-        notify({ type : 'error' , message : 'Failed to copy text' })
+        window.open(`${$state.data.url}/studio/preview/${path}`, '_blank');
       });
 
     } catch (error) {
@@ -887,7 +996,6 @@
       let path = normalizePath(e.currentTarget.getAttribute('target'))
 
       if(path == '' || path == null) {
-
         path = $state.data.path.selected
       }
   
@@ -945,12 +1053,16 @@
     const path = normalizePath(e.currentTarget.getAttribute('target'));
     $state.el.editModal.classList.remove('hidden');
     $state.data.path.edit = path;
+    const filename = path.split('/').pop().split('.').shift();
+    rename.value = filename;
   }
 
   function onRemove(e) {
     const path = normalizePath(e.currentTarget.getAttribute('target'));
     $state.el.removeModal.classList.remove('hidden');
     $state.data.path.remove = path;
+    const filename = path.split('/').pop();
+    removeMessage.textContent = `Are you sure you want to remove '${filename}' ?`;
   };
 
   function generateBucketHTML(folderStructure) {
@@ -984,12 +1096,16 @@
                   </button>
                 </div>
 
-                <div class="col-span-10 xl:col-span-11">
-                  <button class="flex items-center justify-between w-full text-left bucket-toggle">
-                    <h2 class="text-xl" target="${key}">${key}</h2>
-                    <span class="text-xs xl:text-sm"> ${(storage?.mb ?? 0) > 1024 ? `${storage?.gb} GB` : `${storage?.mb} MB`} </span>
-                  </button>
-                </div>
+                    <div class="col-span-10 xl:col-span-11">
+                      <button class="flex items-center justify-between w-full text-left bucket-toggle" target="${key}">
+                        <h2 class="text-sm xl:text-xl break-words truncate min-w-0" target="${key}">
+                          ${key}
+                        </h2>
+                        <span class="text-[10px] sm:text-xs xl:text-md flex-shrink-0 whitespace-nowrap pl-2" target="${key}">
+                          ${(storage?.mb ?? 0) > 1024 ? `${storage?.gb} GB` : `${storage?.mb} MB`}
+                        </span>
+                      </button>
+                  </div>
               </div>
             </li>`;
           });
@@ -1026,7 +1142,7 @@
 
   function addToggleFunctionality() {
 
-    $$query('.bucket-toggle').forEach(button => {
+    $queryAll('.bucket-toggle').forEach(button => {
 
       button.addEventListener('click', async function(e) {
 
@@ -1035,6 +1151,13 @@
         if(target === '' || target == null || target === 'null' || target === 'undefined') {
           return
         }
+
+        $queryAll(".grid.grid-cols-12").forEach(div => {
+          div.classList.remove("bucket-selected");
+        });
+
+        const container = button.closest(".grid.grid-cols-12");
+        if (container) container.classList.add("bucket-selected");
 
         await fetchFiles(target)
         
@@ -1045,7 +1168,7 @@
       })
     })
 
-    $$query('.folder-toggle').forEach(button => {
+    $queryAll('.folder-toggle').forEach(button => {
       button.addEventListener('click', async function(e) {
 
         const target = e.target.getAttribute('target');
@@ -1077,7 +1200,7 @@
       })
     })
 
-    $$query('.credentials').forEach(button => {
+    $queryAll('.credentials').forEach(button => {
       button.addEventListener('click', async function(e) {
 
         const bucket = e.currentTarget.querySelector('p')
@@ -1095,7 +1218,6 @@
             message : `Failed to copy text: '${err.message}'`
           })
         });
-            
       })
     })
   }
@@ -1204,7 +1326,8 @@
     )
 
     $state.el.downloadCount.textContent = selected ? file + folder : 0
-    $state.el.currentFiles.textContent = `${selected ? 'Selected' : ''} ${file} files and ${folder} directories . Total size ${formatSize(totalSize)}`
+    $state.el.deleteCount.textContent = selected ? file + folder : 0
+    $state.el.currentFiles.innerHTML = `${selected ? 'Selected' : ''} ${file} files and ${folder} directories .<br class="block sm:hidden" /> Total size ${formatSize(totalSize)}`
   }
 
 
@@ -1323,6 +1446,121 @@
     }, 1000 * 3);
   }
 
+  uploadBtn.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', async (event) => {
+    const files = event.target.files;
+    if (!files.length) return;
+
+    const path = $state.data.path.selected;
+    const batchSize = 20;
+    const fileList = Array.from(files);
+    const batches = [];
+
+    for (let i = 0; i < fileList.length; i += batchSize) {
+      batches.push(fileList.slice(i, i + batchSize));
+    }
+
+    for (const batch of  batches) {
+      const promises = [];
+      for (const file of batch) {
+        promises.push(() => fetchUploadFile({file, path}));
+      }
+      await Promise.allSettled(promises.map(v => v()))
+      .catch(_ => null);
+    }
+
+    fileInput.value = '';
+
+    await fetchMetaSync($state.data.path.selected);
+    await fetchBucket();
+    await fetchStorage();
+    await fetchFiles($state.data.path.selected);
+  });
+
+  $state.el.createFolderBtn.addEventListener('click', () => {
+    $state.el.createFolderModal.classList.remove('hidden');
+  })
+
+  $state.el.createFolderYesBtnModal.addEventListener('click', async (e) => {
+    try {
+
+      e.preventDefault();
+
+      const path = $state.data.path.selected
+
+      const folder = $state.el.createFolder.value
+
+      if(path == null || path === '') {
+        notify({
+          type : 'warning',
+          message : 'Please select a bucket to use'
+        })
+        return 
+      } 
+
+      if(folder == null || folder === '') {
+        notify({
+          type : 'warning',
+          message : 'The folder is required'
+        })
+        return 
+      }
+
+      showLoading();
+
+      const response = await fetch(`${$state.data.url}/studio/api/folders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          folder : [path,folder].join('/')
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.message)
+      }
+
+      hideLoading()
+
+      await fetchFiles(path)
+
+      $state.el.createFolderModal.classList.add('hidden');
+      $state.el.createFolder.value = '';
+      
+      await notify({
+        type : 'success',
+        message : 'The Folder has been created'
+      })
+
+      
+
+      
+
+    } catch (error) {
+      notify({
+        type : 'error',
+        message : error.message
+      })
+      hideLoading()
+    }
+    
+  });
+
+  $state.el.createFolderNoBtnModal.addEventListener('click', async (event) => {
+    $state.el.createFolderModal.classList.add('hidden');
+  });
+
+
+  $state.el.bucketNoBtnModal.addEventListener('click', () => {
+    $state.el.bucketModal.classList.add('hidden');
+  });
+
   $state.el.bucketCreate.addEventListener('click', () => {
     $state.el.bucketModal.classList.remove('hidden');
   })
@@ -1412,10 +1650,7 @@
       const path = directory !== '' ? $state.data.path.selected+ '/' + directory : $state.data.path.selected
 
       promises.push(() => {
-        return fetchUploadFile(
-        file, 
-        path
-      )
+        return fetchUploadFile({file, path})
       })
     
       if(directory) continue
@@ -1430,7 +1665,7 @@
     }
 
     await Promise.allSettled(promises.map(v => v()))
-
+    await fetchMetaSync($state.data.path.selected);
     await fetchBucket()
     await fetchStorage()
     await fetchFiles($state.data.path.selected)

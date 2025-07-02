@@ -58,7 +58,7 @@
 
 <script>
   const $query = (element) => document.querySelector(element);
-  const $$query = (element) => document.querySelectorAll(element);
+  const $queryAll = (element) => document.querySelectorAll(element);
   const url = `${window.location.protocol}//${window.location.host}`;
 
   const logConsole = $query('#logConsole');
@@ -147,6 +147,10 @@
       if (mode.startsWith('tail:')) {
         tailLines = mode.split(':')[1];
         query += `?tail=${tailLines}`;
+      }
+
+      if(mode.startsWith('all')) {
+        query += `?tail=-1`;
       }
 
       const response = await fetch(`${url}/studio/api/logs/console/${cid}${query}`);

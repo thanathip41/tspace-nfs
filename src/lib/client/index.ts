@@ -628,9 +628,18 @@ class NfsClient {
      * The 'storage' method is used to get information about the storage
      * 
      * @param    {string?}  folder
-     * @returns   {Promise<{name : string , size : number }[]>} 
+     * @returns  {Promise<{path : string; name : string , size : number; sizes: { bytes: number;kb : number;mb:number;gb: number;} }[]>} 
      */
-    async storage (folder ?: string ) : Promise<{name : string , size : number }[]> {
+    async storage (folder ?: string) : Promise<{
+        name : string, 
+        size : number, 
+        sizes : {
+            bytes : number;
+            kb    : number;
+            mb    : number;
+            gb    : number;
+        }
+    }[]> {
 
        try {
 
@@ -655,9 +664,9 @@ class NfsClient {
     /**
      * The 'folders' method is used to get list of folders
      * 
-     * @returns {Promise<{name : string , size : number }[]>} 
+     * @returns {Promise<string[]>} 
      */
-    async folders () : Promise<{name : string , size : number }[]> {
+    async folders (folder ?: string) : Promise<string[]> {
 
         try {
  
@@ -665,7 +674,9 @@ class NfsClient {
     
             const response = await this._fetch({
                 url,
-                data : {}
+                data : {
+                    folder : this._normalizeDefaultDirectory(folder) 
+                }
             })
     
             return response?.folders ?? []

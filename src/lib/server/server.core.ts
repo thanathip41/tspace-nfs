@@ -1,27 +1,16 @@
-import pathSystem         from "path";
-import fsSystem           from "fs";
-import xml                from "xml";
-import bcrypt             from "bcrypt";
-import jwt                from "jsonwebtoken";
-import { Time }           from "tspace-utils";
-import { pipeline }       from "stream/promises";
-import { minify }         from "html-minifier-terser";
-import defaultHTML        from "./default-html";
-import { Queue }          from "./server.queue";
-import { Utils }          from "../utils";
-import { 
-  Spear, 
-  Router, 
-  TContext, 
-  TNextFunction 
-} from "tspace-spear";
-import type { 
-  TCredentials, 
-  TMeta, 
-  TMonitors, 
-  TRequestLog
-} from "../types";
-
+import pathSystem from "path";
+import fsSystem from "fs";
+import xml from "xml";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { Time } from "tspace-utils";
+import { pipeline } from "stream/promises";
+import { minify } from "html-minifier-terser";
+import defaultHTML from "./default-html";
+import { Queue } from "./server.queue";
+import { Utils } from "../utils";
+import { Spear, Router, TContext, TNextFunction } from "tspace-spear";
+import type { TCredentials, TMeta, TMonitors, TRequestLog } from "../types";
 
 class NfsServerCore {
   protected _buckets!: Function | null;
@@ -31,36 +20,37 @@ class NfsServerCore {
     bucket,
   }: TCredentials) => Promise<boolean> | null;
 
-  protected _monitors?: (params : TMonitors) => Promise<void>;
-  protected _monitorsMs : number = 1000 * 5;
+  protected _monitors?: (params: TMonitors) => Promise<void>;
+  protected _monitorsMs: number = 1000 * 30;
 
-  protected _requestLog?: (params : TRequestLog[]) => Promise<void>;
-  protected _requestLogMs : number = 1000 * 60 * 5;
+  protected _requestLog?: (params: TRequestLog[]) => Promise<void>;
+  protected _requestLogMs: number = 1000 * 60 * 5;
   protected _requestLogData: TRequestLog[] = [];
 
   protected _app!: Spear;
   protected _router!: Router;
   protected _html!: string | null;
- 
-  protected _queue                      = new Queue(3);
-  protected _fileExpired: number        = 60 * 60;
-  protected _rootFolder: string         = "nfs";
-  protected _jwtExipred: number         = 60 * 60;
-  protected _jwtSecret: string          = `<secret@${+new Date()}:${Math.floor(Math.random() * 9999)}>`;
-  protected _cluster: boolean | number  = false;
-  protected _progress: boolean          = false;
-  protected _debug: boolean             = false;
-  protected _trash: string              = "@Recycle bin";
-  protected _metadata: string           = "@meta.json";
-  
+
+  protected _queue = new Queue(3);
+  protected _fileExpired: number = 60 * 60;
+  protected _rootFolder: string = "nfs";
+  protected _jwtExipred: number = 60 * 60;
+  protected _jwtSecret: string = `<secret@${+new Date()}:${Math.floor(
+    Math.random() * 9999
+  )}>`;
+  protected _cluster: boolean | number = false;
+  protected _progress: boolean = false;
+  protected _debug: boolean = false;
+  protected _trash: string = "@Recycle bin";
+  protected _metadata: string = "@meta.json";
+  protected _meta: TMeta = {};
+
   protected _utils = new Utils(
     this._buckets,
     this._rootFolder,
     this._metadata,
     this._trash
   );
-
-  protected _meta: TMeta                = {}
 
   get instance() {
     return this._app;
@@ -166,7 +156,7 @@ class NfsServerCore {
 
   /**
    * The 'onMonitors' is method used to monitors the server.
-   * 
+   *
    * @param    {function} callback
    * @property {string}   callback.host
    * @property {object}   callback.ram
@@ -184,7 +174,7 @@ class NfsServerCore {
 
   /**
    * The 'onRequestLogs' is method used to watch requests in the server.
-   * 
+   *
    * @param    {function} callback
    * @property {string}   callback.bucket
    * @property {Date}     callback.time
@@ -237,47 +227,49 @@ class NfsServerCore {
     return this;
   }
 
-  meta (meta: TMeta) {
-    this._meta = meta
-    return this
+  meta(meta: TMeta) {
+    this._meta = meta;
+    return this;
   }
 
   protected _default = async ({ req, res }: TContext) => {
-    const html = this._html == null ? defaultHTML : String(this._html)
+    const html = this._html == null ? defaultHTML : String(this._html);
     const minifiedHtml = await minify(html, {
       collapseWhitespace: true,
       removeComments: true,
       minifyCSS: true,
-      minifyJS: true
+      minifyJS: true,
     });
 
     const pkj = this._utils.safelyParseJSON(
-      await fsSystem.promises.readFile(pathSystem.join(pathSystem.resolve(), 'package.json'), 'utf8')
-    )
+      await fsSystem.promises.readFile(
+        pathSystem.join(pathSystem.resolve(), "package.json"),
+        "utf8"
+      )
+    );
 
-    const protocol = req.headers['x-forwarded-proto'] || 'http';
-    const host = `${req.headers.host}`
+    const protocol = req.headers["x-forwarded-proto"] || "http";
+    const host = `${req.headers.host}`;
     const url = `${protocol}://${host}`;
 
     const meta = {
-      url : this._meta.url ?? url, 
-      title : this._meta.title ?? host, 
-      description : this._meta.description ?? pkj?.description ,
-      fav: this._meta.fav ?? '',
+      url: this._meta.url ?? url,
+      title: this._meta.title ?? host,
+      description: this._meta.description ?? pkj?.description,
+      fav: this._meta.fav ?? "",
       keywords: this._meta.keywords ?? pkj?.keywords,
-      robots: this._meta.robots ?? 'index, nofollow',
-      type : this._meta.type ?? 'website',
-    }
+      robots: this._meta.robots ?? "index, nofollow",
+      type: this._meta.type ?? "website",
+    };
 
     const formatted = minifiedHtml
-    .replaceAll('{{fav}}',meta.fav)
-    .replaceAll('{{title}}',meta.title)
-    .replaceAll('{{description}}',meta.description)
-    .replaceAll('{{keywords}}',meta.keywords)
-    .replaceAll('{{robots}}',meta.robots)
-    .replaceAll('{{type}}',meta.type)
-    .replaceAll('{{url}}',meta.url);
-    
+      .replaceAll("{{fav}}", meta.fav)
+      .replaceAll("{{title}}", meta.title)
+      .replaceAll("{{description}}", meta.description)
+      .replaceAll("{{keywords}}", meta.keywords)
+      .replaceAll("{{robots}}", meta.robots)
+      .replaceAll("{{type}}", meta.type)
+      .replaceAll("{{url}}", meta.url);
 
     return res.html(formatted);
   };
@@ -286,16 +278,32 @@ class NfsServerCore {
     return "benchmark in nfs server";
   };
 
-  protected _media = async ({ req, res, query, params }: TContext) => {
-    try {
-      const { AccessKey, Expires, Signature, Download } = query as {
-        AccessKey: string;
-        Expires: string;
-        Signature: string;
-        Download: string;
-      };
+  protected _media = async ({ req, res, query, params, headers }: TContext) => {
+    const bucket = params.bucket;
 
-      const bucket = params.bucket;
+    const path = String(params["*"])
+      .replace(/^\/+/, "")
+      .replace(/\.{2}(?!\.)/g, "");
+
+    try {
+      const {
+        AccessKey = "",
+        Expires = "",
+        Signature = "",
+        Download = "",
+      } = query as Partial<
+        Record<"AccessKey" | "Expires" | "Signature" | "Download", string>
+      >;
+
+      const combined = `@{${path}-${bucket}-${AccessKey}-${Expires}-${Download}}`;
+      const compare = await bcrypt.compare(
+        combined,
+        Buffer.from(Signature, "base64").toString("utf-8")
+      );
+
+      const expired = Number.isNaN(+Expires)
+        ? true
+        : new Date(+Expires) < new Date();
 
       if (
         [AccessKey, Expires, Signature, Download, bucket].some(
@@ -315,19 +323,21 @@ class NfsServerCore {
         return res.end(xml([error], { declaration: true }));
       }
 
-      const path = String(params["*"]).replace(/^\/+/, "").replace(/\.{2}(?!\.)/g, "");
-      const combined = `@{${path}-${bucket}-${AccessKey}-${Expires}-${Download}}`;
-      const compare = bcrypt.compareSync(
-        combined,
-        Buffer.from(Signature, "base64").toString("utf-8")
-      );
-      const expired = Number.isNaN(+Expires)
-        ? true
-        : new Date(+Expires) < new Date();
+      if (this._requestLog != null) {
+        this._requestLogData.push({
+          time: new Date().toISOString(),
+          bucket,
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(path),
+          path,
+        });
+      }
 
       if (!compare || expired) {
-        res.writeHead(400, { "Content-Type": "text/xml" });
-
         const error = {
           Error: [
             { Code: expired ? "Expired" : "AccessDenied" },
@@ -341,10 +351,13 @@ class NfsServerCore {
           ],
         };
 
-        return res.end(xml([error], { declaration: true }));
+        return res
+        .writeHead(400, { "Content-Type": "text/xml" })
+        .end(xml([error], { declaration: true }));
       }
 
-      const { stream, header, set } = await this._utils.makeStream({
+      const stream = await this._utils.pipeStream({
+        res,
         bucket: bucket,
         filePath: String(path),
         range: req.headers?.range,
@@ -355,45 +368,12 @@ class NfsServerCore {
             .replace(/[=|?|&]+$/g, ""),
       });
 
-      if (stream == null || header == null) {
-        res.writeHead(404, { "Content-Type": "text/xml" });
-
-        const error = {
-          Error: [
-            { Code: "Not found" },
-            { Message: "The file does not exist in our records" },
-            { Resource: req.url },
-            { RequestKey: query?.AccessKey },
-          ],
-        };
-
-        return res.end(xml([error], { declaration: true }));
-      }
-
-      set(res);
-
-      if(this._requestLog != null) {
-        this._requestLogData.push({
-          time: new Date().toISOString(),
-          bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(path),
-          path
-        })
-      }
-
-      return stream.pipe(res);
+      return stream.on("error", () => res.end()).pipe(res);
+      
     } catch (err: any) {
       const message = String(err.message);
 
-      const path = String(params["*"])
-        .replace(/^\/+/, "")
-        .replace(/\.{2}(?!\.)/g, "");
-
       const isNotFound = message.includes("ENOENT: no such file or directory");
-
-      res.writeHead(isNotFound ? 404 : 400, { "Content-Type": "text/xml" });
 
       const error = {
         Error: [
@@ -406,7 +386,9 @@ class NfsServerCore {
         ],
       };
 
-      return res.end(xml([error], { declaration: true }));
+      return res
+      .writeHead(isNotFound ? 404 : 400, { "Content-Type": "text/xml" })
+      .end(xml([error], { declaration: true }));
     }
   };
 
@@ -429,31 +411,35 @@ class NfsServerCore {
         full: true,
       });
 
-      if(this._requestLog != null) {
+      if (this._debug) {
+        console.log({
+          fullPath,
+          path,
+          download,
+          expired,
+        });
+      }
+
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String(path)),
+          path: String(path),
+        });
       }
 
       if (!(await this._utils.fileExists(fullPath))) {
-        if (this._debug) {
-          console.log({
-            fullPath,
-            path,
-            download,
-            expired,
-          });
-        }
-
         return res.notFound(`No such directory or file, '${fileName}'`);
       }
 
       const key = String(token);
+
       const expires = new Time()
         .addSeconds(
           expired == null || Number.isNaN(Number(expired))
@@ -461,11 +447,14 @@ class NfsServerCore {
             : Number(expired)
         )
         .toTimeStamp();
+
       const downloaded = `${Buffer.from(`${expires}@${download}`)
         .toString("base64")
         .replace(/[=|?|&]+$/g, "")}`;
+
       const combined = `@{${path}-${bucket}-${key}-${expires}-${downloaded}}`;
-      const signature = Buffer.from(bcrypt.hashSync(combined, 1)).toString(
+
+      const signature = Buffer.from(await bcrypt.hash(combined, 1)).toString(
         "base64"
       );
 
@@ -503,24 +492,27 @@ class NfsServerCore {
         full: true,
       });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String(path)),
+          path: String(path),
+        });
       }
 
       if (!(await this._utils.fileExists(path))) {
         return res.notFound(`no such file or directory, '${filename}'`);
       }
 
-      const stat = fsSystem.statSync(path);
+      const stat = await this._utils.getFileStat(path);
 
-      if (stat.isDirectory()) {
+      if (stat?.isDirectory()) {
         return res.badRequest(
           "The path is a directory, cannot be read from the filesystem"
         );
@@ -555,23 +547,27 @@ class NfsServerCore {
         full: true,
       });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String(path)),
+          path: String(path),
+        });
       }
 
       if (!(await this._utils.fileExists(fullPath))) {
         return res.notFound(`no such file or directory, '${path}'`);
       }
 
-      const stat = fsSystem.statSync(fullPath);
-      const fileSize = stat.size;
+      const stat = await this._utils.getFileStat(fullPath);
+
+      const fileSize = stat?.size ?? 0;
 
       if (range) {
         const parts = String(range)
@@ -624,32 +620,35 @@ class NfsServerCore {
         full: true,
       });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String(path)),
+          path: String(path),
+        });
       }
 
       if (!(await this._utils.fileExists(fullPath))) {
         return res.notFound(`no such file or directory, '${path}'`);
       }
 
-      const stats = await fsSystem.promises.stat(fullPath);
-      const isDirectory = stats.isDirectory()
+      const stats = await this._utils.getFileStat(fullPath);
+      const isDirectory = stats?.isDirectory() ? true : false;
       const extension = String(fullPath?.split(".")?.pop());
-    
+
       return {
         isDirectory,
-        size      : isDirectory ? 0 : stats.size,
-        createdAt : stats.birthtime,
-        modifiedAt: stats.mtime,
-        extension : isDirectory ? 'folder' : extension,
-        contenType: isDirectory ? null :this._utils.getContentType(extension),
+        size: isDirectory ? 0 : stats?.size,
+        createdAt: stats?.birthtime,
+        modifiedAt: stats?.mtime,
+        extension: isDirectory ? "folder" : extension,
+        contenType: isDirectory ? null : this._utils.getContentType(extension),
       };
     } catch (err) {
       if (this._debug) {
@@ -672,15 +671,18 @@ class NfsServerCore {
 
       const directory = this._utils.normalizeDirectory({ bucket, folder });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
           file: pathSystem.basename(String(folder)),
-          path : String(folder)
-        })
+          path: String(folder),
+        });
       }
 
       if (!(await this._utils.fileExists(directory))) {
@@ -688,16 +690,38 @@ class NfsServerCore {
       }
 
       const fileDirectories = await this._utils.files(directory, {
-        ignore: this._trash,
+        ignoreFolders: [this._trash],
+        ignoreFiles: [this._metadata],
       });
 
-      const storage = fileDirectories.map((name) => {
-        const stat = fsSystem.statSync(name);
-        return {
-          name: pathSystem.relative(directory, name).replace(/\\/g, "/"),
-          size: Number(stat.size / (1024 * 1024)),
+      const promises = fileDirectories.map((dir) => {
+        return async () => {
+          if (dir === this._metadata) return null;
+
+          const stat = await this._utils.getFileStat(dir);
+          const fileSize = stat?.size ?? 0;
+          const path = pathSystem.relative(directory, dir).replace(/\\/g, "/");
+          const name = pathSystem.basename(path);
+
+          return {
+            path,
+            name,
+            size: Number(fileSize / (1024 * 1024)),
+            sizes: {
+              bytes: fileSize,
+              kb: fileSize / 1024,
+              mb: fileSize / 1024 / 1024,
+              gb: fileSize / 1024 / 1024 / 1024,
+            },
+          };
         };
       });
+
+      const results = await Promise.all(promises.map((fn) => fn())).catch(
+        (_) => []
+      );
+
+      const storage = results.filter(Boolean);
 
       return res.ok({
         storage,
@@ -711,27 +735,36 @@ class NfsServerCore {
     }
   };
 
-  protected _apiFolders = async ({ req, res }: TContext) => {
+  protected _apiFolders = async ({ req, res, body }: TContext) => {
     try {
       const { bucket } = req;
 
+      let folder = body?.folder as string | null;
+
+      if (Array.isArray(folder)) {
+        folder = folder.join("/");
+      }
+
       const directory = this._utils.normalizeDirectory({
         bucket,
-        folder: null,
+        folder: folder ?? null,
       });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String('')),
-          path : String('')
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String("")),
+          path: String(""),
+        });
       }
 
-      const folders = fsSystem.readdirSync(directory);
+      const folders = await this._utils.getFolders(directory).catch((_) => []);
 
       return res.ok({
         folders,
@@ -799,9 +832,12 @@ class NfsServerCore {
         this._utils.normalizePath({ directory, path: file.name, full: true })
       );
 
-      await this._utils.getMetadata(bucket);
+      await this._utils.syncMetadata(bucket).catch((_) => null);
 
-      const path = this._utils.normalizePath({ directory: folder, path: file.name })
+      const path = this._utils.normalizePath({
+        directory: folder,
+        path: file.name,
+      });
 
       return res.ok({
         path,
@@ -906,25 +942,30 @@ class NfsServerCore {
 
       await writeFile(to);
 
-      await this._utils.getMetadata(bucket);
+      await this._utils.syncMetadata(bucket);
 
       const path = this._utils.normalizePath({ directory: folder, path: name });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String(path)),
+          path: String(path),
+        });
       }
+
+      const stats = await this._utils.getFileStat(to);
 
       return res.ok({
         path,
         name: name,
-        size: fsSystem.statSync(to).size,
+        size: stats?.size,
       });
     } catch (err) {
       if (this._debug) {
@@ -959,27 +1000,33 @@ class NfsServerCore {
 
       await pipeline(req, writeStream);
 
-      const file = await fsSystem.promises.stat(chunkPath);
+      const stats = await this._utils.getFileStat(chunkPath);
 
-      await this._utils.getMetadata(bucket);
+      await this._utils.syncMetadata(bucket);
 
-      const path = this._utils.normalizePath({ directory: folder, path: fileName })
+      const path = this._utils.normalizePath({
+        directory: folder,
+        path: fileName,
+      });
 
-      if(this._requestLog != null) {
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          file:pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+          file: pathSystem.basename(String(path)),
+          path: String(path),
+        });
       }
 
       return res.ok({
         path,
         name: fileName,
-        size: file.size,
+        size: stats?.size,
       });
     } catch (err) {
       if (this._debug) {
@@ -1024,25 +1071,33 @@ class NfsServerCore {
 
       await writeFile(String(base64), to);
 
-      const path = this._utils.normalizePath({ directory: folder, path: String(name) })
-      
-      await this._utils.getMetadata(bucket);
+      const path = this._utils.normalizePath({
+        directory: folder,
+        path: String(name),
+      });
 
-      if(this._requestLog != null) {
+      await this._utils.syncMetadata(bucket);
+
+      if (this._requestLog != null) {
         this._requestLogData.push({
           time: new Date().toISOString(),
           bucket,
-          ip: req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress,
-          userAgent: req.headers['user-agent'],
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.ip ||
+            req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
           file: pathSystem.basename(String(path)),
-          path : String(path)
-        })
+          path: String(path),
+        });
       }
+
+      const stats = await this._utils.getFileStat(to).catch((_) => null);
 
       return res.ok({
         path,
         name: name,
-        size: fsSystem.statSync(to).size,
+        size: stats?.size,
       });
     } catch (err) {
       if (this._debug) {
@@ -1078,7 +1133,7 @@ class NfsServerCore {
 
       this._queue.add(async () => await this._utils.trashed({ path, bucket }));
 
-      await this._utils.getMetadata(bucket);
+      await this._utils.syncMetadata(bucket).catch((_) => null);
 
       return res.ok();
     } catch (err: any) {
@@ -1212,41 +1267,36 @@ class NfsServerCore {
     { req, res, cookies }: TContext,
     next: TNextFunction
   ) => {
-
     try {
-
       const authorization = cookies["auth.session"];
-    
+
       if (authorization == null || authorization === "") {
-        if (/\/studio\/api/.test(req.url || '')) {
+        if (/\/studio\/api/.test(req.url || "")) {
           return res.unauthorized(
             "Please check your credentials. Are they valid ?"
           );
         }
 
-        res.writeHead(302, { Location: '/studio' });
+        res.writeHead(302, { Location: "/studio" });
         return res.end();
-        
       }
 
-      const { buckets, token , username } = this._verify(authorization);
+      const { buckets, token, username } = this._verify(authorization);
 
       req.buckets = buckets;
 
       req.token = token;
 
-      req.username = username
+      req.username = username;
 
       return next();
     } catch (e: any) {
-
-      if (/\/studio\/api/.test(req.url || '')) {
+      if (/\/studio\/api/.test(req.url || "")) {
         return res.badRequest(e.message);
       }
 
-      res.writeHead(302, { Location: '/studio' });
+      res.writeHead(302, { Location: "/studio" });
       return res.end();
-    
     }
   };
 
@@ -1262,7 +1312,7 @@ class NfsServerCore {
       };
     } catch (err: any) {
       let message = err.message;
-     
+
       if (err.name === "JsonWebTokenError") {
         message = "Invalid credentials";
       }

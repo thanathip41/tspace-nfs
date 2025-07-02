@@ -305,13 +305,24 @@
 
       container.innerHTML = createSkeletonCard()
 
-      async function fetchMonitorsData() {
+      async function fetchAndRenderMonitorsData() {
         try {
+          container.innerHTML = createSkeletonCard();
+
           await new Promise(r => setTimeout(r, 800));
           const res = await fetch(`${url}/studio/api/logs/monitors`);
           const data = await res.json();
           if (!data.success || !data.requests) throw new Error("Invalid data format");
-          return data.requests;
+         
+          const servers = data.requests
+          if(servers.length) {
+            
+            container.innerHTML = servers.map(createServerCard).join('');
+            container.classList.remove('md:grid-cols-3');
+            container.classList.add(`md:grid-cols-${Math.min(3,servers.length)}`);
+          }
+
+          return servers;
         } catch (error) {
           return [];
         }
@@ -344,7 +355,7 @@
               title="View Console Logs"
               class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h4m-9 4h10a2 2 0 002-2V7a2 2 0 00-2-2H8a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </a>
@@ -442,15 +453,9 @@
         return Array.from({ length: 3 }, (_,i) => i).map(v=> html).join('')
       }
 
-      const servers = await fetchMonitorsData();
+      await fetchAndRenderMonitorsData();
 
-      if(servers.length) {
-        container.innerHTML = servers.map(createServerCard).join('');
-        container.classList.remove('md:grid-cols-3');
-        container.classList.add(`md:grid-cols-${Math.min(3,servers.length)}`);
-      }
-
-      setInterval(fetchMonitorsData, 1000 * 60);
+      setInterval(fetchAndRenderMonitorsData, 1000 * 30);
     }
 
     InitMonitor();
