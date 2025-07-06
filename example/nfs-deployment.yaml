@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nfs-server
+  template:
+    metadata:
+      labels:
+        app: nfs-server
+    spec:
+      containers:
+        - name: nfs
+          image: example-nfs-server:develop
+          ports:
+            - containerPort: 8000
+              hostPort: 8000
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

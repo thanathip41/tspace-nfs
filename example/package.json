@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "ts-node  ./src/index.ts",
@@ -14,7 +13,23 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "tspace-nfs": "1.2.0-beta.18",
+    "tspace-nfs": "1.2.0-beta.32",
     "xml": "1.0.1"
+  },
+  "devDependencies": {
+    "@types/archiver": "6.0.3",
+    "@types/bcrypt": "5.0.2",
+    "@types/express": "5.0.3",
+    "@types/express-fileupload": "1.5.1",
+    "@types/fs-extra": "11.0.4",
+    "@types/html-minifier-terser": "7.0.2",
+    "@types/jsonwebtoken": "9.0.6",
+    "@types/node-cron": "3.0.11",
+    "@types/xml": "1.0.11",
+    "copyfiles": "2.4.1",
+    "express": "5.1.0",
+    "express-fileupload": "1.5.1",
+    "terser": "5.34.1",
+    "typescript": "^5.8.3"
   }
 }

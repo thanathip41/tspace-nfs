@@ -2,88 +2,52 @@ import { NfsServer } from "tspace-nfs";
 import fsSystem from 'fs'
 import pathSystem from 'path'
 
-const buckets = fsSystem.readdirSync(pathSystem.join(pathSystem.resolve(),'nfs')).filter((name) => {
-    return fsSystem.statSync(pathSystem.join('nfs', name)).isDirectory();
-}) 
+const ROOT_DIR = 'nfs'
 
-function generateRequests(rows = 50) {
-  const buckets = ["dev1", "dev2", "dev3", "dev4", "dev5", "dev6"];
-  const days = 7;
-  const result: {
-    date: string;
-    bucket:string;
-    count:number;
-  }[] = [];
-  const today = new Date();
+const getBuckets = () => {
+  const nfsPath = pathSystem.join(pathSystem.resolve(), ROOT_DIR);
 
-  function formatDate(date : Date) {
-    return date.toISOString().slice(0, 10);
-  }
+  try {
+    if (!fsSystem.existsSync(nfsPath)) {
+      fsSystem.mkdirSync(nfsPath, { recursive: true });
+    }
 
-  for (let i = 0; i < rows; i++) {
-    const dayOffset = Math.floor(Math.random() * days);
-    const date = new Date(today);
-    date.setDate(today.getDate() - dayOffset);
-    const dateStr = formatDate(date);
-
-    const bucket = buckets[Math.floor(Math.random() * buckets.length)];
-
-    const count = Math.floor(Math.random() * 50) + 1;
-
-    result.push({
-      date: dateStr,
-      bucket,
-      count,
+    let buckets = fsSystem.readdirSync(nfsPath).filter((name) => {
+      return fsSystem.statSync(pathSystem.join(nfsPath, name)).isDirectory();
     });
-  }
 
-  return result;
-}
+    if (buckets.length === 0) {
+      for (let i = 1; i <= 6; i++) {
+        const folder = pathSystem.join(nfsPath, `folder-${i}`);
+        fsSystem.mkdirSync(folder, { recursive: true });
+      }
+
+      buckets = fsSystem.readdirSync(nfsPath).filter((name) => {
+        return fsSystem.statSync(pathSystem.join(nfsPath, name)).isDirectory();
+      });
+    }
+
+    return buckets;
+  } catch (err) {
+    return [];
+  }
+};
 
 const requests: {
-  date: string;
   bucket: string;
-  count: number
+  time: string; 
+  path: string;   
+  file: string; 
+  ip?: string | null;
+  userAgent?: string | null;
 }[] = [];
 
-
-const MAX_TOTAL_RAM = 16000
-function generateMockMonitors(count: number): {
-  host: string,
-  ram: { total: number, used: number, unit: string, time: string },
-  cpu: { total: number, used: number, unit: string, time: string }
-}[] {
-  const monitors : any[] = []
-  const now = new Date()
-
-  for (let i = 1; i <= count; i++) {
-    const host = `vm-${((i - 1) % 3) + 1}`
-    const time = new Date(now.getTime() + i * 60000).toISOString() // +1 min per entry
-
-    monitors.push({
-      host,
-      cid: (Math.random() * 9999999999).toString(36),
-      ram: {
-        total: MAX_TOTAL_RAM,
-        used: parseFloat((Math.random() * MAX_TOTAL_RAM).toFixed(4)),
-        time
-      },
-      cpu: {
-        total: 8,
-        used: parseFloat((Math.random() * 100).toFixed(4)),
-        time
-      }
-    })
-  }
-
-  return monitors
-}
-
 const monitors : {
-  host ?: string | null,
-  cid ?: string | null,
-  ram: { total: number, used: number, time: string },
-  cpu: { total: number, used: number, time: string }
+  host ?: string | null
+  cid ?: string | null
+  time ?: string | null
+  ram: { total: number, used: number },
+  cpu: { total: number, used: number }
 }[] = []
 
 
@@ -139,7 +103,28 @@ new NfsServer()
         return credentials 
     },
     onLoadRequests : async () => {
-      return requests
+
+      const mergerRequest: {
+        date: string;
+        bucket: string;
+        count: number;
+      }[] = [];
+
+      const map = new Map<string, { date: string; bucket: string; count: number }>();
+
+      for (const req of requests) {
+        const date = new Date(req.time).toLocaleDateString('sv-SE');
+        const key = `${date}-${req.bucket}`;
+        if (!map.has(key)) {
+          map.set(key, { date, bucket: req.bucket, count: 1 });
+        } else {
+          map.get(key)!.count++;
+        }
+      }
+
+      mergerRequest.push(...map.values());
+
+      return mergerRequest
     },
     onLoadMonitors : async () => {
 
@@ -163,15 +148,13 @@ new NfsServer()
     }
 })
 .onLoadBucketLists(async () => {
-    return await new Promise(r => setTimeout(() => r(buckets)));
+  return await new Promise(r => setTimeout(() => r(getBuckets())));
 })
 .onMonitors(async (v) => {
-    console.log(v)
-    monitors.push(...generateMockMonitors(10))
+  monitors.push(v)
 },1000 * 10)
 .onRequestLogs(async (c) => {
-    console.log(c)
-    requests.push(...generateRequests(10))
+  requests.push(...c)
 },1000 * 10)
 .credentials({
   expired : 1000 * 3600,
@@ -179,15 +162,21 @@ new NfsServer()
 })
 .onCredentials(async ({ token , secret , bucket }) => {
   const lists = [
-      {
-          token: 'token-dev',
-          secret: 'secret-dev',
-          bucket : 'dev'
-      }
+    {
+      token: 'token-folder-1',
+      secret: 'secret-folder-1',
+      bucket : 'folder-1'
+    }
   ]
   return lists.every(list => list.bucket === bucket && list.secret === secret && list.token === token)
 })
 .debug()
 .progress()
-.directory('nfs')
-.listen(7000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}/studio`))
+.directory(ROOT_DIR)
+// .listen(8000 , ({ port }) => {
+//   console.log(`Server is running at http://localhost:${port}/`);
+// })
+// write this to support deploy in k8s
+.listen(8000 , 'localhost' , ({ port }) => {
+  console.log(`Server is running at http://localhost:${port}/`);
+})
