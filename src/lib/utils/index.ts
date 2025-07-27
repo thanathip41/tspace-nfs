@@ -4,6 +4,7 @@ import fsExtra        from "fs-extra";
 import os             from "os";
 import { Time }       from "tspace-utils";
 import { TResponse }  from "tspace-spear";
+import { execSync } from 'child_process';
 import type { 
   FileInfo, 
   TMetadata 
@@ -25,7 +26,7 @@ export class Utils {
     string,
     { stat: fsSystem.Stats; cachedAt: number }
   >();
-  private FILE_META_CACHE_TTL_MS = 1000 * 60 * 15;
+  private FILE_META_CACHE_TTL_MS = 1000 * 60 * 10;
 
   constructor(
     private buckets: Function | null,
@@ -862,4 +863,22 @@ export class Utils {
 
     return folders.flat().map((v) => v.replace(/\\/g, "/"));
   };
+
+  getLogCommand(cid: string, tail = -1, namespace = 'default') {
+    const tailOption = tail === -1 ? '' : `--tail=${tail}`;
+
+    try {
+      execSync(`docker inspect ${cid}`, { stdio: 'ignore' });
+      return `docker logs ${tailOption} ${cid}`.trim();
+    } catch (err: any) {}
+
+    try {
+      execSync(`kubectl get pod ${cid} -n ${namespace}`, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      return `kubectl logs ${tailOption} ${cid} -n ${namespace}`.trim();
+    } catch (err: any) {}
+
+    throw new Error(`Container or pod '${cid}' not found or not accessible via Docker or Kubernetes`);
+  }
 }

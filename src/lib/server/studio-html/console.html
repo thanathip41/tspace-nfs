@@ -139,7 +139,9 @@
   }
 
   async function fetchLogs() {
+    
     if(!followLogs) return; 
+
     const statusElement = $query('#status')
     try {
 
@@ -163,6 +165,10 @@
 
       statusElement.textContent = 'Connected';
       statusElement.className = 'text-green-400 text-sm ml-2';
+
+      if (followLogs) {
+        setTimeout(fetchLogs, 2000);
+      }
     } catch (err) {
       statusElement.textContent = 'Disconnected';
       statusElement.className = 'text-red-500 text-sm ml-2';
@@ -171,7 +177,6 @@
 
   filterInput.addEventListener('input', renderLogs);
   headerCid.innerHTML = `Container: <b class="text-white text-lg"> ${cid} </b>`;
-  setInterval(fetchLogs, 2000);
   fetchLogs();
   
 </script>

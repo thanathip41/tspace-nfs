@@ -27,7 +27,15 @@ class NfsServer extends NfsStudio {
    * @param {function} callback
    * @returns 
    */
-  listen(port:number, callback ?: ({ port , server } : { port : number , server : Server }) => void) {
+  listen(
+    port : number, 
+    hostname?: string | ((callback: { server: Server; port: number }) => void),
+    callback ?: (callback : { server : Server , port : number }) => void
+  ) {
+
+    if(arguments.length === 2 && typeof hostname === 'function') {
+      callback = hostname
+    }
 
     this._app = new Spear({
       cluster : this._cluster

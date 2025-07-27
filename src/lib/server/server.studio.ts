@@ -32,7 +32,7 @@ class NfsStudio extends NfsServerCore {
   protected _onStudioMonitors?: () => Promise<TLoadMonitors[]>;
 
   private BASE_FOLDER_STUDIO = "studio-html";
-  private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30; // 30 days
+  private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30 * 12; // 1 year
 
   /**
    * The 'useStudio' is method used to wrapper to check the credentials for studio.
@@ -1162,7 +1162,8 @@ class NfsStudio extends NfsServerCore {
         .get(url, {
           responseType: "text",
           headers: {
-            Cookie: `auth.session=${authorization}`,
+            'Cookie': `auth.session=${authorization}`,
+            'User-Agent': 'tspace-nfs/1.0',
           },
         })
         .catch(() => ({ data: "" }));
@@ -1176,10 +1177,8 @@ class NfsStudio extends NfsServerCore {
       return res.end(data);
     }
 
-    // next step logs in k8s
-    const command =
-      tail === -1 ? `docker logs ${cid}` : `docker logs --tail ${tail} ${cid}`;
-
+    const command = this._utils.getLogCommand(cid,tail)
+  
     exec(command, { maxBuffer: 1024 * 1024 * 30 }, (err, stdout, stderr) => {
       if (err) {
         res.statusCode = 400;
