@@ -3,8 +3,12 @@ import fsSystem       from "fs";
 import fsExtra        from "fs-extra";
 import os             from "os";
 import { Time }       from "tspace-utils";
-import { TResponse }  from "tspace-spear";
-import { execSync } from 'child_process';
+import { execSync }   from 'child_process';
+import  Crypto        from 'crypto';
+import type { 
+  TRequest, 
+  TResponse 
+}  from "tspace-spear";
 import type { 
   FileInfo, 
   TMetadata 
@@ -26,7 +30,9 @@ export class Utils {
     string,
     { stat: fsSystem.Stats; cachedAt: number }
   >();
+
   private FILE_META_CACHE_TTL_MS = 1000 * 60 * 10;
+  private PACKAGE_JSON : Record<string,any> | null = null;
 
   constructor(
     private buckets: Function | null,
@@ -227,13 +233,28 @@ export class Utils {
     };
   }
 
-  public safelyParseJSON = (v: string) => {
+  public safelyParseJSON = (v: any) => {
     try {
       return JSON.parse(v);
     } catch (err) {
       return v;
     }
   };
+
+  public packageJson = async () => {
+
+    if(this.PACKAGE_JSON == null) {
+      const pkj = this.safelyParseJSON(
+        await fsSystem.promises.readFile(
+          pathSystem.join(pathSystem.resolve(), "package.json"),
+          "utf8"
+        ).catch(() =>  null)
+      );
+      this.PACKAGE_JSON = pkj;
+    }
+      
+    return this.PACKAGE_JSON;
+  }
 
   public removeDir = async (path: string) => {
     return await fsSystem.promises.rm(path, { recursive: true }).catch((_) => {
@@ -327,17 +348,25 @@ export class Utils {
   }
 
   public async pipeStream({
+    req,
     res,
     bucket,
     filePath,
     range,
     download = false,
+    requests
   }: {
+    req: TRequest;
     res: TResponse;
     bucket: string;
     filePath: string;
     range?: string;
     download: boolean;
+    requests ?: {
+      AccessKey : string
+      Expires   : string
+      Signature : string
+    }
   }) {
     const directory = this.normalizeDirectory({ bucket, folder: null });
 
@@ -388,11 +417,42 @@ export class Utils {
 
     const isVideo = contentType.startsWith("video/");
 
+    const maxAge = 1000 * 60 * 60 * 24 * 30; // 30 days
+    const etag = Crypto.createHash("md5").update(`${stat.size}-${stat.mtimeMs}`).digest("hex");
+
+    const pkj = await this.packageJson();
+
+    const baseHeader = {
+      "Server": pkj?.name ?? 'tspace-nfs',
+      "Connection" :"keep-alive",
+      "Keep-Alive" :"timeout=60, max=1000",
+      "Cache-Control": `public, max-age=${maxAge}, immutable`,
+      "Strict-transport-security": `max-age=${maxAge}; includeSubDomains`,
+      "ETag": `"${etag}"`,
+      "Date" : new Date(stat.birthtimeMs).toUTCString(),
+      "Last-modified": new Date(stat.birthtimeMs).toUTCString(),
+      "Vary" :"Origin, Accept-Encoding",
+      "Accept-Ranges": "bytes",
+      "Content-Length": fileSize,
+      "Content-Type": contentType,
+      "X-NFS-id" : Crypto.createHash('sha256').update(`${requests?.AccessKey}-${requests?.Signature}-${requests?.Expires}`).digest('hex'),
+      "X-NFS-request-id" : Crypto.createHash('sha256').update(`${+new Date()}`).digest('hex'),
+      "X-NFS-version" : `${pkj?.version ?? '1.0.0'}`,
+      "X-Content-type-options": "nosniff",
+      "X-Xss-protection": "1; mode=block",
+    }
+
     try {
+
+      if (req.headers["if-none-match"] === `"${etag}"` && !range) {
+        res.writeHead(304, baseHeader);
+        res.end();
+        return;
+      }
+
       if (!isVideo || range == null) {
         const header = {
-          "Content-Length": fileSize,
-          "Content-Type": contentType,
+          ...baseHeader
         };
 
         const stream = fsSystem.createReadStream(path);
@@ -411,10 +471,9 @@ export class Utils {
       const stream = fsSystem.createReadStream(path, { start, end });
 
       const header = {
+        ...baseHeader,
         "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
         "Content-Length": chunksize,
-        "Content-Type": contentType,
       };
 
       writeHead(header, 206);
@@ -753,45 +812,6 @@ export class Utils {
 
     return [].concat(...files.filter(Boolean));
   }
-
-  // public async fileStructure(
-  //   dirPath: string,
-  //   { includeFiles = false }: { includeFiles?: boolean } = {}
-  // ): Promise<FileInfo[]> {
-  //   const files = await fsSystem.promises.readdir(dirPath).catch(() => []);
-  //   const rootLen = this.rootFolder.length + 1;
-
-  //   const tasks = files.flatMap((file) => {
-  //     if (file === this.metadata) return [];
-
-  //     return [async () => {
-  //       const fullPath = pathSystem.join(dirPath, file);
-  //       const stats = await this.getFileStat(fullPath);
-  //       if (!stats) return null;
-
-  //       const isFolder = stats.isDirectory();
-  //       if (!includeFiles && !isFolder) return null;
-
-  //       const normalizedPath = fullPath.replace(/\\/g, '/').slice(rootLen);
-  //       const isProtected = isFolder && file.includes(this.trash);
-
-  //       return {
-  //         name: file,
-  //         path: normalizedPath,
-  //         isFolder,
-  //         lastModified: stats.mtime,
-  //         size: isFolder ? null : stats.size,
-  //         extension: isFolder
-  //           ? isProtected ? 'system' : 'folder'
-  //           : pathSystem.extname(file).replace(/^\./, '') || 'unknown',
-  //         protected: isProtected,
-  //       };
-  //     }];
-  //   });
-
-  //   const results = await this.runConcurrent(tasks, 300);
-  //   return results.filter((v): v is FileInfo => v !== null);
-  // }
 
   public fileStructure = async (
     dirPath: string,

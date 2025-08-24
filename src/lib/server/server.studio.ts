@@ -253,12 +253,15 @@ class NfsStudio extends NfsServerCore {
     }
 
     const stream = await this._utils.pipeStream({
+      req,
       res,
       bucket: bucket,
       filePath: String(filePath),
       range: req.headers?.range,
       download: true,
     });
+
+    if(stream == null) return;
 
     return stream.on("error", () => res.end()).pipe(res);
   };
@@ -1041,12 +1044,15 @@ class NfsStudio extends NfsServerCore {
     }
 
     const stream = await this._utils.pipeStream({
+      req,
       res,
       bucket: bucket,
       filePath: String(filePath),
       range: req.headers?.range,
       download: true,
     });
+
+    if(stream == null) return;
 
     return stream.on("error", () => res.end()).pipe(res);
   };

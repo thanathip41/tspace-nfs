@@ -44,6 +44,7 @@ class NfsServerCore {
   protected _trash: string = "@Recycle bin";
   protected _metadata: string = "@meta.json";
   protected _meta: TMeta = {};
+  protected _logger: boolean = true;
 
   protected _utils = new Utils(
     this._buckets,
@@ -155,6 +156,16 @@ class NfsServerCore {
   }
 
   /**
+   * The 'disabledLogger' method is used disabled Logger.
+   *
+   * @returns  {this}
+   */
+  disabledLogger (): this {
+    this._logger = false;
+    return this
+  }
+
+  /**
    * The 'onMonitors' is method used to monitors the server.
    *
    * @param    {function} callback
@@ -241,12 +252,7 @@ class NfsServerCore {
       minifyJS: true,
     });
 
-    const pkj = this._utils.safelyParseJSON(
-      await fsSystem.promises.readFile(
-        pathSystem.join(pathSystem.resolve(), "package.json"),
-        "utf8"
-      )
-    );
+    const pkj = await this._utils.packageJson();
 
     const protocol = req.headers["x-forwarded-proto"] || "http";
     const host = `${req.headers.host}`;
@@ -278,7 +284,7 @@ class NfsServerCore {
     return "benchmark in nfs server";
   };
 
-  protected _media = async ({ req, res, query, params, headers }: TContext) => {
+  protected _media = async ({ req, res, query, params }: TContext) => {
     const bucket = params.bucket;
 
     const path = String(params["*"])
@@ -357,10 +363,16 @@ class NfsServerCore {
       }
 
       const stream = await this._utils.pipeStream({
+        req,
         res,
         bucket: bucket,
         filePath: String(path),
         range: req.headers?.range,
+        requests : {
+          AccessKey,
+          Expires,
+          Signature
+        },
         download:
           Download ===
           Buffer.from(`${Expires}@true`)
@@ -368,7 +380,11 @@ class NfsServerCore {
             .replace(/[=|?|&]+$/g, ""),
       });
 
-      return stream.on("error", () => res.end()).pipe(res);
+      if(stream == null) return;
+
+      stream.on("error", () => res.end())
+      
+      return stream.pipe(res);
       
     } catch (err: any) {
       const message = String(err.message);

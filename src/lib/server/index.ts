@@ -46,10 +46,12 @@ class NfsServer extends NfsStudio {
       credentials: true
     })
 
-    this._app.useLogger({
-      exceptPath  : /\/benchmark(\/|$)|logs|\/favicon\.ico(\/|$)/
-    })
-
+    if(this._logger) {
+      this._app.useLogger({
+        exceptPath  : /\/benchmark(\/|$)|logs|\/favicon\.ico(\/|$)/
+      })
+    }
+    
     this._app.useBodyParser()
 
     this._app.useCookiesParser()
@@ -181,6 +183,9 @@ class NfsServer extends NfsStudio {
     })
 
     this._app.listen(port, ({ port , server }) => {
+
+      server.keepAliveTimeout = 1000 * 60;
+      server.headersTimeout   = 1000 * 61;
 
       if(this._buckets != null) {
 
