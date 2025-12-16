@@ -693,20 +693,22 @@ class NfsStudio extends NfsServerCore {
           });
 
           if (this._onStudioBucketCreated != null) {
-            const random = () =>
-              Array.from({ length: 5 }, (_, i) => i)
-                .map((v) => Math.random().toString(36).substring(3))
-                .join("");
+
+            const randomString = (length = 8) => {
+              return Array.from({ length }, () =>
+                Math.floor(Math.random() * 36).toString(36)
+              ).join('');
+            }
+
             await this._onStudioBucketCreated({
               bucket: String(bucket),
-              token: String(random()),
-              secret: String(random()),
+              token: String(randomString(16)),
+              secret: String(randomString(32)),
             });
           }
         }
 
-        const loadCredentials =
-          this._onStudioLoadBucketCredentials == null
+        const loadCredentials = this._onStudioLoadBucketCredentials == null
             ? []
             : await this._onStudioLoadBucketCredentials();
 
@@ -760,15 +762,18 @@ class NfsStudio extends NfsServerCore {
       });
     }
 
-    const randomString = (length = 8) =>
-      Math.random().toString(36).substr(2, length);
+    const randomString = (length = 8) => {
+      return Array.from({ length }, () =>
+        Math.floor(Math.random() * 36).toString(36)
+      ).join('');
+    }
 
     if (this._onStudioBucketCreated != null) {
       await this._onStudioBucketCreated({
         bucket: String(bucket),
-        token: String(token == null || token === "" ? randomString() : token),
+        token: String(token == null || token === "" ? randomString(16) : token),
         secret: String(
-          secret == null || secret === "" ? randomString() : secret
+          secret == null || secret === "" ? randomString(32) : secret
         ),
       });
     }
