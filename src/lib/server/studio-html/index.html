@@ -202,13 +202,13 @@
                           />
                           </svg>
                         </label>
-                        <span onclick="sortTable()"> File Name</span>
+                        <span onclick="sortTable(0)"> File Name</span>
                       </div>
                     
                     </th>
-                    <th onclick="sortTable()"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
-                    <th onclick="sortTable()"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
-                    <th onclick="sortTable()"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
+                    <th onclick="sortTable(1)"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Size</th>
+                    <th onclick="sortTable(2)"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">File Type</th>
+                    <th onclick="sortTable(3)"  class="cursor-pointer py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Last Modified</th>
                     <th class="py-2 px-4 text-left text-md font-medium text-gray-500 dark:text-gray-400">Actions</th>
                   </tr>
                 </thead>
@@ -614,27 +614,62 @@
     return row
   }
 
-  async function sortTable() {
+  async function sortTable(colIndex) {
     showLoading();
-    const table = document.getElementById('dataTable');
-    const rows = Array.from(table.querySelectorAll('tbody tr'));
-    const isAscending = table.getAttribute('data-sort-order') === 'asc';
 
-    table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
+    const table = document.getElementById('dataTable');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    const currentCol = table.dataset.sortCol;
+
+    let isAscending = table.dataset.sortOrder !== 'asc';
+
+    table.dataset.sortCol = colIndex;
+    table.dataset.sortOrder = isAscending ? 'asc' : 'desc';
+
+    const getValue = (text) => {
+      text = text.trim();
+
+      const sizeMatch = text.match(/^([\d.]+)\s*(B|KB|MB|GB|TB)$/i);
+      if (sizeMatch) {
+        const value = parseFloat(sizeMatch[1]);
+        const unit = sizeMatch[2].toUpperCase();
+        const map = {
+          B: 1,
+          KB: 1024,
+          MB: 1024 ** 2,
+          GB: 1024 ** 3,
+          TB: 1024 ** 4
+        };
+        return value * map[unit];
+      }
+
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+        return new Date(text.replace(' ', 'T')).getTime();
+      }
+
+      if (!isNaN(text)) {
+        return parseFloat(text);
+      }
+    
+      return text.toLowerCase();
+    }
 
     rows.sort((a, b) => {
-      const aText = a.cells[0].innerText.trim();
-      const bText = b.cells[0].innerText.trim();
+     
+      const aVal = getValue(a.cells[colIndex].innerText);
+      const bVal = getValue(b.cells[colIndex].innerText);
 
-      if (!isNaN(aText) && !isNaN(bText)) {
-        return isAscending ? aText - bText : bText - aText;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return isAscending ? aVal - bVal : bVal - aVal;
       }
+
       return isAscending
-        ? aText.localeCompare(bText)
-        : bText.localeCompare(aText);
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
     });
 
-    const tbody = table.querySelector('tbody');
     tbody.innerHTML = '';
     rows.forEach(row => tbody.appendChild(row));
 

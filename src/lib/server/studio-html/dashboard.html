@@ -341,9 +341,9 @@
         const percentRam = (usedRam / totalRam) * 100;
 
         const totalCpu = server.cpus.reduce((sum, c) => sum + c.total, 0) / server.cpus.length;
-        const usedCpu = server.cpus.reduce((sum, c) => sum + c.used, 0) / server.cpus.length;
-        const percentCpu = (usedCpu / totalCpu) * 100;
-
+        const percentCpu = server.cpus.reduce((sum, c) => sum + c.used, 0) / server.cpus.length;
+        const usedCpu = (totalCpu * percentCpu) / 100;
+        
         return `
         <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 font-mono min-w-[280px]">
 
@@ -384,7 +384,7 @@
             <h3 class="text-lg font-semibold mb-2">CPU Usage</h3>
             <div class="space-y-1 text-sm">
               <div class="flex justify-between"><span>Total Cores</span><span>${totalCpu.toFixed(1)}</span></div>
-              <div class="flex justify-between"><span>Avg Usage</span><span>${usedCpu.toFixed(2)}%</span></div>
+              <div class="flex justify-between"><span>Avg Usage</span><span>${usedCpu.toFixed(2)}</span></div>
             </div>
             <div class="mt-2">
               <div class="w-full h-4 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden">
