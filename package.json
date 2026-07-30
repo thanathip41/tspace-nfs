@@ -28,7 +28,7 @@
     "build": "tsc && copyfiles -u 3 src/lib/server/studio-html/**/*.html build/lib/server",
     "prepare": "npm run build",
     "beta": "npm run build && npm publish --tag beta",
-    "release": "npm run build && npm publish",
+    "release": "sh ./release.sh",
     "start": "ts-node test/server.ts",
     "client": "ts-node test/client.ts",
     "server": "ts-node  test/server.ts",
