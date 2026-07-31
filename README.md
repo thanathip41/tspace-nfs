@@ -123,8 +123,9 @@ const nfs = new NfsClient({
 ```js
 import { NfsServer } from "tspace-nfs";
 
-new NfsServer()
-.useStudio({
+const server = new NfsServer();
+
+server.useStudio({
     onSetup: () => {
       return {
         logo: {
@@ -160,7 +161,7 @@ new NfsServer()
     
       return
     },
-    onLoadBucketCredentials  : async (username: string) => {
+    onLoadBucketCredentials  : async (username) => {
     // The simple example, you can use any database or another to get the credentials.
 
     const database = [
@@ -196,9 +197,87 @@ new NfsServer()
           bucket : 'dev'
         }
       */
-    }
+    },
+    onLoadPermissions : async (username) => {
+      // The simple example, you can use any database or another to get the permission with username.
+      console.log(username)
+      return { 
+        dashbord: true,
+        monitors: true,
+        requests: true,
+        console: true,
+      }
+    },
+
+    onLoadRequests : async () => {
+
+      // The simple example, you can use any database or another to get the logs.
+      const load = [
+        {
+          date: "2026-01-01T00:00:00.000Z";
+          bucket: "dev1";
+          count: 500;
+        },
+        {
+          date: "2026-01-01T00:00:00.000Z";
+          bucket: "dev2";
+          count: 100;
+        }
+      ]
+      
+      return load
+    },
+    onLoadMonitors : async () => {
+      
+      // The simple example, you can use any database or another to get the logs.
+      const load = [
+        { 
+          host : 'host1', 
+          cid  : null,
+          rams : { 
+            total: 16268.7266, 
+            used: 200.2734 ,
+            units: { total: 'MB', used: 'MB' 
+          },
+          cpus : { 
+            total: 8, used: 13.118 },
+            units: { total: 'cores', used: '%' }
+          }
+        },
+        { 
+          host : 'host2', 
+          cid  : null,
+          rams : { 
+            total: 16268.7266, 
+            used: 200.2734 ,
+            units: { total: 'MB', used: 'MB' 
+          },
+          cpus : { 
+            total: 8, used: 13.118 },
+            units: { total: 'cores', used: '%' }
+          }
+        }
+      ];
+
+      return load
+    },
 })
-.listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}/studio`))
+
+server.onMonitors(async (monitors) => {
+    
+    // save to your database or any
+    console.log(monitors)
+
+}, 1000 * 60);
+  
+server.onRequestLogs(async (requests) => {
+    if(!requests.length) return
+
+    // save to your database or any
+    console.log(requests)
+  },1000 * 60 * 3);
+
+server.listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}/studio`))
 ```
 ## Images
 
