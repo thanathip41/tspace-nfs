@@ -147,9 +147,9 @@ class NfsServer extends NfsStudio {
 
       const error = {
         Error : [
-            { Code : 'Not found' },
-            { Message : 'The request was not found.'},
-            { Resource : req.url },
+          { Code : 'Not found' },
+          { Message : 'The request was not found.'},
+          { Resource : req.url },
         ]
       }
 

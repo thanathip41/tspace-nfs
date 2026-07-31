@@ -125,6 +125,10 @@ export class Utils {
 
         const usage = parseInt(usageRaw, 10);
 
+         console.log({
+          usage
+        })
+
         if (isNaN(usage)) return null;
 
         if (find === "current") {
@@ -138,6 +142,7 @@ export class Utils {
           return Math.max(0, usage - inactiveFile);
         }
 
+       
         return usage;
       } catch (err) {
         return null;
@@ -225,11 +230,19 @@ export class Utils {
       ram: {
         total: toMB(ramTotal || 0),
         used: toMB(ramUsed || 0),
+        units : {
+          total : 'MB',
+          used  : 'MB'
+        }
       },
       cpu: {
         total: os.cpus().length,
         used: Math.min(100, +cpuUsedPercent.toFixed(4)),
-      },
+        units : {
+          total : 'cores',
+          used  : '%'
+        }
+      }
     };
   }
 

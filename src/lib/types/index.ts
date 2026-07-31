@@ -38,13 +38,20 @@ export type TMonitors = {
   cid  : string | null;
   time: string; 
   ram: {
-    total: number;
-    used : number;
-   
+    total : number;
+    used  : number;
+    units : { 
+      total : string; 
+      used  : string;
+    }
   };
   cpu: {
-    total: number;
-    used : number;
+    total : number;
+    used  : number;
+    units : { 
+      total : string;
+      used  : string;
+    }
   };
 }
 

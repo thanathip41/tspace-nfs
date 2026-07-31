@@ -32,6 +32,12 @@ class NfsStudio extends NfsServerCore {
   protected _onStudioSetup?: () => TSetup;
   protected _onStudioRequestLogs?: () => Promise<TLoadRequestLog[]>;
   protected _onStudioMonitors?: () => Promise<TLoadMonitors[]>;
+  protected _onStudioPermissions ?: (username:string) => Promise<{
+    dashbord : boolean;
+    monitors : boolean;
+    requests : boolean;
+    console  : boolean;
+  }>;
 
   private BASE_FOLDER_STUDIO = "studio-html";
   private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30 * 12; // 1 year
@@ -46,10 +52,12 @@ class NfsStudio extends NfsServerCore {
   useStudio({
     onCredentials,
     onBucketCreated,
-    onLoadBucketCredentials,
     onSetup,
+    onLoadBucketCredentials,
+
     onLoadRequests,
     onLoadMonitors,
+    onLoadPermissions
   }: {
     onCredentials: ({
       username,
@@ -70,6 +78,12 @@ class NfsStudio extends NfsServerCore {
     onSetup?: () => TSetup;
     onLoadRequests?: () => Promise<TLoadRequestLog[]>;
     onLoadMonitors?: () => Promise<TLoadMonitors[]>;
+    onLoadPermissions ?: (username:string) => Promise<{
+      dashbord : boolean;
+      monitors : boolean;
+      requests : boolean;
+      console  : boolean;
+    }>;
   }): this {
     this._onStudioCredentials = onCredentials;
     this._onStudioBucketCreated = onBucketCreated;
@@ -77,6 +91,7 @@ class NfsStudio extends NfsServerCore {
     this._onStudioSetup = onSetup;
     this._onStudioRequestLogs = onLoadRequests;
     this._onStudioMonitors = onLoadMonitors;
+    this._onStudioPermissions = onLoadPermissions;
 
     return this;
   }
@@ -1111,13 +1126,11 @@ class NfsStudio extends NfsServerCore {
 
   protected studioPageDashboard = async ({ req, res }: TContext) => {
 
-    const loadCredentials = this._onStudioLoadBucketCredentials == null
-    ? []
-    : await this._onStudioLoadBucketCredentials(req.username);
+    const hasPermission = this._onStudioPermissions == null 
+    ? false
+    : (await this._onStudioPermissions(req.username)).dashbord ?? false
 
-    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
-
-    if (!allowBuckets.some((v) => v.includes("*"))) {
+    if (!hasPermission) {
       res.writeHead(403, { "Content-Type": "text/xml" });
 
       const error = {
@@ -1145,13 +1158,12 @@ class NfsStudio extends NfsServerCore {
   };
 
   protected studioLogRequest = async ({ res, req }: TContext) => {
-    const loadCredentials = this._onStudioLoadBucketCredentials == null
-    ? []
-    : await this._onStudioLoadBucketCredentials(req.username);
+    
+     const hasPermission = this._onStudioPermissions == null 
+    ? false
+    : (await this._onStudioPermissions(req.username)).requests ?? false
 
-    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
-
-    if (!allowBuckets.some((v) => v.includes("*"))) {
+    if (!hasPermission) {
       return res.forbidden();
     }
 
@@ -1164,7 +1176,7 @@ class NfsStudio extends NfsServerCore {
     });
   };
 
-  protected studioLogMonitors = async ({ res, body, cookies }: TContext) => {
+  protected studioLogMonitors = async ({ res }: TContext) => {
     if (this._onStudioMonitors == null) {
       return res.badRequest("Please enable the studio.");
     }
@@ -1181,13 +1193,12 @@ class NfsStudio extends NfsServerCore {
     params,
     cookies,
   }: TContext) => {
-    const loadCredentials = this._onStudioLoadBucketCredentials == null
-    ? []
-    : await this._onStudioLoadBucketCredentials(req.username);
 
-    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
+    const hasPermission = this._onStudioPermissions == null 
+    ? false
+    : (await this._onStudioPermissions(req.username)).dashbord ?? false
 
-    if (!allowBuckets.some((v) => v.includes("*"))) {
+    if (!hasPermission) {
       return res.forbidden();
     }
 
