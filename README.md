@@ -141,46 +141,61 @@ new NfsServer()
       // The simple example, you can use any database or another to a wrapper check the credentials for studio.
       const credentials = [
         {
-            buckets : ['*'], // or ['dev','dev1']
             username: 'root',
             password: '',
         }
       ]
   
       const find = credentials.find(v => v.username === username && v.password === password )
-  
-      const result = {
-          logged : find == null ? false : true, // if true can login
-          buckets : find == null ? [] : find?.buckets
-      }
-  
-      return result
+
+      return find == null ? false : true,
     },
-    onBucketCreated : async ({ token , secret , bucket }) => {
+    onBucketCreated : async ({ username, token , secret , bucket }) => {
 
       // The simple example, you can use any database or another to store data.
       console.log({
-          token , secret , bucket
+        username, // username from auth, Please do something about owner bucket with username
+        token , secret , bucket
       })
     
       return
     },
-    onLoadBucketCredentials  : async () => {
+    onLoadBucketCredentials  : async (username: string) => {
     // The simple example, you can use any database or another to get the credentials.
-      const credentials = [
+
+    const database = [
+      {
+        username : 'root',
+        token : 'token-dev', 
+        secret : 'secret-dev', 
+        bucket : 'dev'
+      },
+      {
+        username : 'root2',
+        token : 'token-dev', 
+        secret : 'secret-dev', 
+        bucket : 'dev'
+      }
+    ]
+
+    // username -> root
+
+    const credentials = database.filter(v => v.username === username).map(v => {
+        return {
+          token  : v.token,
+          secret : v.secret,
+          bucket : v.bucket,
+        }
+      })
+
+      return credentials 
+      /** credentials is
         {
           token : 'token-dev', 
           secret : 'secret-dev', 
           bucket : 'dev'
-        },
-        {
-          token : 'token-dev1', 
-          secret : 'secret-dev1', 
-          bucket : 'dev1'
         }
-      ]
-
-      return credentials 
+      */
     }
 })
 .listen(8000 , ({ port }) => console.log(`Server is running on port http://localhost:${port}/studio`))
