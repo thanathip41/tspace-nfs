@@ -99,6 +99,13 @@ class NfsServerCore {
   directory(folder: string): this {
     this._rootFolder = folder;
 
+    this._utils = new Utils(
+      this._buckets,
+      this._rootFolder,
+      this._metadata,
+      this._trash
+    );
+
     return this;
   }
 
@@ -1161,7 +1168,7 @@ class NfsServerCore {
     }
   };
 
-  protected _apiConnect = async ({ res, body }: TContext) => {
+  protected _apiConnect = async ({ req, res, body }: TContext) => {
     const { token, secret, bucket } = body;
 
     if (this._credentials != null) {
@@ -1297,9 +1304,7 @@ class NfsServerCore {
         return res.end();
       }
 
-      const { buckets, token, username } = this._verify(authorization);
-
-      req.buckets = buckets;
+      const { token, username } = this._verify(authorization);
 
       req.token = token;
 

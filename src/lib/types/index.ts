@@ -4,6 +4,13 @@ export type TCredentials = {
   bucket : string;
 }
 
+export type TOnCreateBucket = {
+  username : string;
+  token    : string; 
+  secret   : string; 
+  bucket   : string;
+}
+
 export type TSetup = { 
   logo ?: {
     index?: string | null;

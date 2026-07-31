@@ -187,6 +187,8 @@ class NfsServer extends NfsStudio {
       server.keepAliveTimeout = 1000 * 60;
       server.headersTimeout   = 1000 * 61;
 
+      this._utils.syncMetadata("*").catch((_) => null);
+
       if(this._buckets != null) {
 
         cron.schedule('0 0 0 * * *', async () => {

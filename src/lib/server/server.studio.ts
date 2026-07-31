@@ -14,19 +14,21 @@ import type {
   TLoadMonitors,
   TLoadRequestLog,
   TLoginCrentials,
+  TOnCreateBucket,
   TSetup,
 } from "../types";
 class NfsStudio extends NfsServerCore {
   protected _onStudioBucketCreated?: ({
+    username,
     bucket,
     secret,
     token,
-  }: TCredentials) => Promise<void> | null;
+  }: TOnCreateBucket) => Promise<void> | null;
   protected _onStudioCredentials?: ({
     username,
     password,
-  }: TLoginCrentials) => Promise<{ logged: boolean; buckets: string[] }> | null;
-  protected _onStudioLoadBucketCredentials?: () => Promise<TCredentials[]>;
+  }: TLoginCrentials) => Promise<boolean> | null;
+  protected _onStudioLoadBucketCredentials?: (username:string) => Promise<TCredentials[]>;
   protected _onStudioSetup?: () => TSetup;
   protected _onStudioRequestLogs?: () => Promise<TLoadRequestLog[]>;
   protected _onStudioMonitors?: () => Promise<TLoadMonitors[]>;
@@ -55,18 +57,15 @@ class NfsStudio extends NfsServerCore {
     }: {
       username: string;
       password: string;
-    }) => Promise<{ logged: boolean; buckets: string[] }>;
+    }) => Promise<boolean>;
     onBucketCreated?: ({
+      username,
       token,
       secret,
       bucket,
-    }: {
-      token: string;
-      secret: string;
-      bucket: string;
-    }) => Promise<void>;
-    onLoadBucketCredentials?: () => Promise<
-      { bucket: string; token: string; secret: string }[]
+    }: TOnCreateBucket) => Promise<void>;
+    onLoadBucketCredentials?: (username:string) => Promise<
+      TCredentials[]
     >;
     onSetup?: () => TSetup;
     onLoadRequests?: () => Promise<TLoadRequestLog[]>;
@@ -78,9 +77,6 @@ class NfsStudio extends NfsServerCore {
     this._onStudioSetup = onSetup;
     this._onStudioRequestLogs = onLoadRequests;
     this._onStudioMonitors = onLoadMonitors;
-
-    // creating file meta for any buckets
-    this._utils.syncMetadata("*").catch((_) => null);
 
     return this;
   }
@@ -126,7 +122,12 @@ class NfsStudio extends NfsServerCore {
   };
 
   protected studioStorage = async ({ req, res }: TContext) => {
-    const allowBuckets: string[] = req.buckets ?? [];
+
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     const rootFolder = this._rootFolder;
 
@@ -176,7 +177,11 @@ class NfsStudio extends NfsServerCore {
 
     const [bucket, ...rest] = String(path).split("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -273,7 +278,11 @@ class NfsStudio extends NfsServerCore {
 
     const [bucket, ...rest] = String(path).split("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -326,7 +335,11 @@ class NfsStudio extends NfsServerCore {
 
     const [bucket, ...rest] = String(path).split("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -385,12 +398,12 @@ class NfsStudio extends NfsServerCore {
       });
     }
 
-    const check = await this._onStudioCredentials({
+    const checked = await this._onStudioCredentials({
       username: String(username),
       password: String(password),
     });
 
-    if (!check?.logged) {
+    if (!checked) {
       count = count + 1;
       const attempts = jwt.sign(
         {
@@ -425,7 +438,6 @@ class NfsStudio extends NfsServerCore {
           issuer: "nfs-studio",
           sub: {
             username,
-            buckets: check?.buckets ?? [],
             permissions: ["*"],
             token: Buffer.from(`${+new Date()}`).toString("base64"),
           },
@@ -458,7 +470,11 @@ class NfsStudio extends NfsServerCore {
     try {
       const [bucket] = String(body.path).split("/");
 
-      const allowBuckets: string = req.buckets || [];
+      const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
       if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
         return res.forbidden();
@@ -493,7 +509,11 @@ class NfsStudio extends NfsServerCore {
 
       const [bucket, ...rest] = String(body.path).split("/");
 
-      const allowBuckets: string = req.buckets || [];
+      const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
       if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
         return res.forbidden();
@@ -569,7 +589,11 @@ class NfsStudio extends NfsServerCore {
 
       folder = this._utils.normalizeFolder(String(folder));
 
-      const allowBuckets: string = req.buckets || [];
+      const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
       if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
         return res.forbidden();
@@ -655,7 +679,12 @@ class NfsStudio extends NfsServerCore {
   };
 
   protected studioBucket = async ({ req, res }: TContext) => {
-    const allowBuckets: string[] = req.buckets ?? [];
+
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     const rootFolder = this._rootFolder;
 
@@ -701,6 +730,7 @@ class NfsStudio extends NfsServerCore {
             }
 
             await this._onStudioBucketCreated({
+              username : req.username,
               bucket: String(bucket),
               token: String(randomString(16)),
               secret: String(randomString(32)),
@@ -710,7 +740,7 @@ class NfsStudio extends NfsServerCore {
 
         const loadCredentials = this._onStudioLoadBucketCredentials == null
             ? []
-            : await this._onStudioLoadBucketCredentials();
+            : await this._onStudioLoadBucketCredentials(req.username);
 
         const credentials = loadCredentials.find((v) => v.bucket === bucket);
 
@@ -770,6 +800,7 @@ class NfsStudio extends NfsServerCore {
 
     if (this._onStudioBucketCreated != null) {
       await this._onStudioBucketCreated({
+        username : req.username,
         bucket: String(bucket),
         token: String(token == null || token === "" ? randomString(16) : token),
         secret: String(
@@ -790,7 +821,11 @@ class NfsStudio extends NfsServerCore {
 
     const [bucket] = String(path).split("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -836,7 +871,11 @@ class NfsStudio extends NfsServerCore {
 
     const [bucket, ...rest] = String(path).split("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -892,7 +931,11 @@ class NfsStudio extends NfsServerCore {
 
     const path = rest.join("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -940,7 +983,11 @@ class NfsStudio extends NfsServerCore {
 
     const [bucket, ...rest] = String(path).split("/");
 
-    const allowBuckets: string = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
       return res.forbidden();
@@ -1063,7 +1110,12 @@ class NfsStudio extends NfsServerCore {
   };
 
   protected studioPageDashboard = async ({ req, res }: TContext) => {
-    const allowBuckets: string[] = req.buckets || [];
+
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!allowBuckets.some((v) => v.includes("*"))) {
       res.writeHead(403, { "Content-Type": "text/xml" });
@@ -1093,7 +1145,11 @@ class NfsStudio extends NfsServerCore {
   };
 
   protected studioLogRequest = async ({ res, req }: TContext) => {
-    const allowBuckets: string[] = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!allowBuckets.some((v) => v.includes("*"))) {
       return res.forbidden();
@@ -1125,7 +1181,11 @@ class NfsStudio extends NfsServerCore {
     params,
     cookies,
   }: TContext) => {
-    const allowBuckets: string[] = req.buckets || [];
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
     if (!allowBuckets.some((v) => v.includes("*"))) {
       return res.forbidden();
