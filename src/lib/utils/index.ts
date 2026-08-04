@@ -124,11 +124,7 @@ export class Utils {
         if (usageRaw === "max") return null;
 
         const usage = parseInt(usageRaw, 10);
-
-         console.log({
-          usage
-        })
-
+        
         if (isNaN(usage)) return null;
 
         if (find === "current") {

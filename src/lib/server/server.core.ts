@@ -869,7 +869,7 @@ class NfsServerCore {
       });
     } catch (err) {
       if (this._debug) {
-        console.log(err, "here!");
+        console.log(err);
       }
 
       throw err;
