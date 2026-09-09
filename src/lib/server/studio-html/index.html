@@ -746,12 +746,18 @@
         }
       }
 
-      const blob = await response.blob();
+      const reader = response.body.getReader();
+      const chunks = [];
 
-      await sleep(300)
-          
-      hideLoading()
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
 
+      hideLoading();
+
+      const blob = new Blob(chunks, { type: 'application/zip' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
