@@ -161,6 +161,17 @@ server.useStudio({
     
       return
     },
+    onBucketCanDelete: async ({ username, bucket }) => {
+
+      // The simple example, you can use any database or another to store data.
+      console.log({
+        canDelete: 'true',
+        username,
+        bucket
+      })
+    
+      return true
+    },
     onLoadBucketCredentials  : async (username) => {
     // The simple example, you can use any database or another to get the credentials.
 
