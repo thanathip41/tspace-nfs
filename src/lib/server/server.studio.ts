@@ -7,6 +7,7 @@ import JavaScriptObfuscator from "javascript-obfuscator";
 import xml from "xml";
 import { exec } from "child_process";
 import axios from "axios";
+import fsExtra from "fs-extra";
 import { type TContext } from "tspace-spear";
 import { NfsServerCore } from "./server.core";
 import type {
@@ -24,7 +25,11 @@ class NfsStudio extends NfsServerCore {
     secret,
     token,
   }: TOnCreateBucket) => Promise<void> | null;
-   protected _onStudioBucketCanDelete?: ({
+  protected _onStudioBucketCanDelete?: ({
+    username,
+    bucket,
+  }: { username : string; bucket : string}) => Promise<boolean>;
+  protected _onStudioBucketCanClone?: ({
     username,
     bucket,
   }: { username : string; bucket : string}) => Promise<boolean>;
@@ -57,6 +62,7 @@ class NfsStudio extends NfsServerCore {
     onCredentials,
     onBucketCreated,
     onBucketCanDelete,
+    onBucketCanClone,
     onSetup,
     onLoadBucketCredentials,
 
@@ -81,6 +87,10 @@ class NfsStudio extends NfsServerCore {
       username,
       bucket,
     }: { username: string, bucket : string}) => Promise<boolean>;
+    onBucketCanClone?: ({
+      username,
+      bucket,
+    }: { username: string, bucket : string}) => Promise<boolean>;
     onLoadBucketCredentials?: (username:string) => Promise<
       TCredentials[]
     >;
@@ -96,7 +106,8 @@ class NfsStudio extends NfsServerCore {
   }): this {
     this._onStudioCredentials = onCredentials;
     this._onStudioBucketCreated = onBucketCreated;
-    this._onStudioBucketCanDelete = onBucketCanDelete
+    this._onStudioBucketCanDelete = onBucketCanDelete;
+    this._onStudioBucketCanClone = onBucketCanClone
     this._onStudioLoadBucketCredentials = onLoadBucketCredentials;
     this._onStudioSetup = onSetup;
     this._onStudioRequestLogs = onLoadRequests;
@@ -877,16 +888,65 @@ class NfsStudio extends NfsServerCore {
       });
     }
 
-    // if (this._onStudioBucketDeleted!= null) {
-    //   await this._onStudioBucketDeleted({
-    //     username : req.username,
-    //     bucket: String(bucket),
-    //     token: String(token == null || token === "" ? randomString(16) : token),
-    //     secret: String(
-    //       secret == null || secret === "" ? randomString(32) : secret
-    //     ),
-    //   });
-    // }
+    return res.ok();
+  };
+
+  protected studioBucketClone = async ({ req, res, body }: TContext) => {
+    const { bucket, target } = body;
+
+    if ([bucket].some((v) => v == null || v === "")) {
+      return res.badRequest("The bucket is required.");
+    }
+
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
+
+    if (!(allowBuckets.includes(String(bucket)) || allowBuckets[0] === "*")) {
+      return res.forbidden("You do not have permission to access this bucket.");
+    }
+
+    if (!(allowBuckets.includes(String(target)) || allowBuckets[0] === "*")) {
+      return res.forbidden("You do not have permission to access this target bucket.");
+    }
+
+    if(this._onStudioBucketCanClone == null) {
+      return res.forbidden("Bucket deletion is not allowed.");
+    }
+
+    if(!(await this._onStudioBucketCanClone({ 
+        username : req.username , 
+        bucket : String(bucket)
+      })
+    )) {
+      return res.forbidden("You do not have permission to clone this bucket.");
+    }
+
+    const currentPath = this._utils.normalizeDirectory({
+      bucket: String(bucket),
+      folder: null,
+    });
+
+    const newPath = this._utils.normalizeDirectory({
+      bucket: String(target),
+      folder: null,
+    });
+
+    if (!await this._utils.fileExists(currentPath)) {
+      return res.notFound("Source bucket not found.");
+    }
+
+    if (!await this._utils.fileExists(newPath)) {
+      return res.notFound("Target bucket not found.");
+    }
+
+    await fsExtra.copy(newPath,currentPath, {
+      overwrite: false,
+    }).catch((err) => console.log(err));
+
+    await this._utils.syncMetadata(String(bucket));
 
     return res.ok();
   };
@@ -1032,14 +1092,18 @@ class NfsStudio extends NfsServerCore {
     const stats = await this._utils.getFileStat(fullPath);
 
     if (stats?.isDirectory()) {
+
       if (path.includes(this._trash)) {
         await fsSystem.promises.rm(fullPath, { recursive: true, force: true });
+        await this._utils.syncMetadata(bucket);
         return res.ok();
       }
 
       this._queue.add(
         async () => await this._utils.trashedWithFolder({ path, bucket })
       );
+
+      await this._utils.syncMetadata(bucket);
 
       return res.ok();
     }
@@ -1051,6 +1115,8 @@ class NfsStudio extends NfsServerCore {
     }
 
     this._queue.add(async () => await this._utils.trashed({ path, bucket }));
+
+    await this._utils.syncMetadata(String(bucket));
 
     return res.ok();
   };

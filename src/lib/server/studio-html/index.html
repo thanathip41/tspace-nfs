@@ -88,7 +88,7 @@
   </nav>
 
 
-  <div id="notify-container" class="space-y-4 fixed right-0 top-0 m-2 items-end justify-end z-50 pointer-events-none"></div>
+  <div id="notify-container" class="space-y-4 fixed right-0 top-0 m-2 items-end justify-end z-[999] pointer-events-none"></div>
 
   <div class="h-[100vh]">
 
@@ -376,11 +376,61 @@
   </div>
 
   <div id="settingModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
+    <div class="relative bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
+
+      <button
+        id="settingModalBtnClose"
+        type="button"
+        class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center
+              text-gray-500 hover:text-gray-900 hover:bg-gray-100
+              rounded-full text-2xl
+              dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700"
+        aria-label="Close"
+        >
+          &times;
+      </button>
 
       <h3 class="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">
         Settings
       </h3>
+
+      <div class="border border-blue-300 dark:border-blue-700 rounded-lg p-4 mb-6">
+        <h4 class="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">
+          Clone Bucket
+        </h4>
+
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          Clone the contents of this bucket to another existing bucket.
+        </p>
+
+        <label
+          for="cloneBucket"
+          class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          Target Bucket Name
+        </label>
+
+        <input
+          id="cloneBucket"
+          name="cloneBucket"
+          type="text"
+          autocomplete="off"
+          placeholder="Enter Bucket Name"
+          class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm
+                dark:bg-gray-700 dark:border-gray-600 dark:text-white
+                focus:ring-blue-500 focus:border-blue-500"
+        />
+
+        <div class="flex justify-end mt-4">
+          <button
+            id="cloneBucketYesBtnModal"
+            type="button"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+          >
+            Clone Bucket
+          </button>
+        </div>
+      </div>
 
       <div class="border border-red-300 dark:border-red-700 rounded-lg p-4">
         <h4 class="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">
@@ -395,7 +445,7 @@
           for="deleteBucket"
           class="block text-sm font-medium text-gray-700 dark:text-gray-300"
         >
-          Bucket name
+          Bucket Name
         </label>
 
         <input
@@ -416,15 +466,6 @@
             class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
           >
             Yes, Delete
-          </button>
-
-          <button
-            id="deleteBucketNoBtnModal"
-            type="button"
-            class="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600
-                  rounded-md text-gray-800 dark:text-white"
-          >
-            Cancel
           </button>
         </div>
       </div>
@@ -451,61 +492,63 @@
       files : []
     },
     el : {
-      currentFiles          : $query('#currentFiles'),
-      filesSelectdAll       : $query('#filesSelectdAll'),
-      filesSelectd          : $queryAll('.filesSelectd'),
-      removeModal           : $query('#removeModal'),
-      removeYesBtnModal     : $query('#removeYesBtnModal'),
-      removeNoBtnModal      : $query('#removeNoBtnModal'),
-      removesModal          : $query('#removesModal'),
-      removesYesBtnModal    : $query('#removesYesBtnModal'),
-      removesNoBtnModal     : $query('#removesNoBtnModal'),
-      removesCountModal     : $query('#removesCountModal'),
-      editModal             : $query('#editModal'),
-      editYesBtnModal       : $query('#editYesBtnModal'),
-      editNoBtnModal        : $query('#editNoBtnModal'),
-      bucketModal           : $query('#bucketModal'),
-      bucketYesBtnModal     : $query('#bucketYesBtnModal'),
-      bucketNoBtnModal      : $query('#bucketNoBtnModal'),
-      bucketCreate          : $query('#bucketCreate'),
-      rename                : $query('#rename'),
-      fileProgressTableBody : $query('#fileProgressTableBody'),
-      fileTableBody         : $query('#fileTableBody'),
-      dropZone              : $query('#dropZone'),
-      bucketContainer       : $query('#bucket-container'),
-      tableContainer        : $query('#tableContainer'),
-      noBucketMessage       : $query('#noBucketMessage'),
-      loading               : $query('#loading'),
-      currentPath           : $query('#currentPath'),
-      themeToggle           : $query('#themeToggle'),
-      toggleIcon            : $query('#toggleIcon'),
-      logout                : $query('#logout'),
-      bucket                : $query('#bucket'),
-      token                 : $query('#token'),
-      secret                : $query('#secret'),
-      buckets               : $query('#buckets'),
-      storaged              : $query('#storaged'),
-      notifyContainer       : $query('#notify-container'),
-      errorMessage          : $query('#errorMessage'),
-      download              : $query('#download'),
-      delete                : $query('#delete'),
-      downloadCount         : $query('#download-count'),
-      deleteCount           : $query('#delete-count'),
-      bucketToggle          : $queryAll('.bucket-toggle'),
-      folderToggle          : $queryAll('.folder-toggle'),
-      uploadBtn             : $query('#uploadBtn'),
-      fileInput             : $query('#fileInput'),
-      removeMessage         : $query('#removeMessage'),
-      createFolderModal     : $query('#createFolderModal'),
-      createFolderBtn       : $query('#createFolderBtn'),
-      createFolder          : $query('#createFolder'),
+      currentFiles            : $query('#currentFiles'),
+      filesSelectdAll         : $query('#filesSelectdAll'),
+      filesSelectd            : $queryAll('.filesSelectd'),
+      removeModal             : $query('#removeModal'),
+      removeYesBtnModal       : $query('#removeYesBtnModal'),
+      removeNoBtnModal        : $query('#removeNoBtnModal'),
+      removesModal            : $query('#removesModal'),
+      removesYesBtnModal      : $query('#removesYesBtnModal'),
+      removesNoBtnModal       : $query('#removesNoBtnModal'),
+      removesCountModal       : $query('#removesCountModal'),
+      editModal               : $query('#editModal'),
+      editYesBtnModal         : $query('#editYesBtnModal'),
+      editNoBtnModal          : $query('#editNoBtnModal'),
+      bucketModal             : $query('#bucketModal'),
+      bucketYesBtnModal       : $query('#bucketYesBtnModal'),
+      bucketNoBtnModal        : $query('#bucketNoBtnModal'),
+      bucketCreate            : $query('#bucketCreate'),
+      rename                  : $query('#rename'),
+      fileProgressTableBody   : $query('#fileProgressTableBody'),
+      fileTableBody           : $query('#fileTableBody'),
+      dropZone                : $query('#dropZone'),
+      bucketContainer         : $query('#bucket-container'),
+      tableContainer          : $query('#tableContainer'),
+      noBucketMessage         : $query('#noBucketMessage'),
+      loading                 : $query('#loading'),
+      currentPath             : $query('#currentPath'),
+      themeToggle             : $query('#themeToggle'),
+      toggleIcon              : $query('#toggleIcon'),
+      logout                  : $query('#logout'),
+      bucket                  : $query('#bucket'),
+      token                   : $query('#token'),
+      secret                  : $query('#secret'),
+      buckets                 : $query('#buckets'),
+      storaged                : $query('#storaged'),
+      notifyContainer         : $query('#notify-container'),
+      errorMessage            : $query('#errorMessage'),
+      download                : $query('#download'),
+      delete                  : $query('#delete'),
+      downloadCount           : $query('#download-count'),
+      deleteCount             : $query('#delete-count'),
+      bucketToggle            : $queryAll('.bucket-toggle'),
+      folderToggle            : $queryAll('.folder-toggle'),
+      uploadBtn               : $query('#uploadBtn'),
+      fileInput               : $query('#fileInput'),
+      removeMessage           : $query('#removeMessage'),
+      createFolderModal       : $query('#createFolderModal'),
+      createFolderBtn         : $query('#createFolderBtn'),
+      createFolder            : $query('#createFolder'),
       createFolderYesBtnModal : $query('#createFolderYesBtnModal'),
       createFolderNoBtnModal  : $query('#createFolderNoBtnModal'),
-      setting                : $query('#setting'),
-      settingModal           : $query('#settingModal'),
-      deleteBucket       : $query('#deleteBucket'),
+      setting                 : $query('#setting'),
+      settingModal            : $query('#settingModal'),
+      settingModalBtnClose    : $query('#settingModalBtnClose'),
+      deleteBucket            : $query('#deleteBucket'),
       deleteBucketYesBtnModal : $query('#deleteBucketYesBtnModal'),
-      deleteBucketNoBtnModal  : $query('#deleteBucketNoBtnModal'),
+      cloneBucket             : $query('#cloneBucket'),
+      cloneBucketYesBtnModal  : $query('#cloneBucketYesBtnModal'),
     }
   }
 
@@ -1908,6 +1951,7 @@
         throw new Error(err.message)
       }
 
+      await sleep(500)
       hideLoading()
 
       $state.el.bucketModal.classList.add('hidden');
@@ -1948,6 +1992,82 @@
   $state.el.setting.addEventListener('click', async() => {
     $state.el.settingModal.classList.remove('hidden');
   });
+
+  $state.el.cloneBucketYesBtnModal.addEventListener('click', async (e) => {
+    try {
+
+      e.preventDefault();
+
+      const bucket= $state.data.path.selected
+
+      const target = $state.el.cloneBucket.value
+
+      if(bucket == null || bucket === '') {
+        notify({
+          type : 'warning',
+          message : 'Please select a bucket to use'
+        })
+        return 
+      } 
+
+      if(target == null || target === '') {
+        notify({
+          type : 'warning',
+          message : 'The target bucket is required'
+        })
+        return;
+      }
+
+      if(target === bucket) {
+         notify({
+          type : 'warning',
+          message : 'The specified bucket is invalid'
+        })
+        return; 
+      }
+
+      showLoading();
+
+      const response = await fetch(`${$state.data.url}/studio/api/buckets/clone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bucket' : bucket
+        },
+        body: JSON.stringify({ 
+          bucket  : bucket,
+          target  : target,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.message)
+      }
+
+      $state.el.settingModal.classList.add('hidden');
+      $state.el.cloneBucket.value = '';
+      
+      hideLoading();
+
+      await fetchBucket();
+      await fetchFiles(target);
+
+      await notify({
+        type : 'success',
+        message : 'The Bucket cloned successfully.'
+      })
+
+    } catch (error) {
+      notify({
+        type : 'error',
+        message : error.message
+      })
+      hideLoading()
+    }
+    
+  });
+
 
   $state.el.deleteBucketYesBtnModal.addEventListener('click', async (e) => {
     try {
@@ -2007,7 +2127,7 @@
 
       await notify({
         type : 'success',
-        message : 'The Bucket has been deleted'
+        message : 'The Bucket deleted successfully.'
       })
 
     } catch (error) {
@@ -2020,7 +2140,7 @@
     
   });
 
-  $state.el.deleteBucketNoBtnModal.addEventListener('click', async (event) => {
+  $state.el.settingModalBtnClose.addEventListener('click', async (event) => {
     $state.el.settingModal.classList.add('hidden');
   });
 

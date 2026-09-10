@@ -165,7 +165,17 @@ server.useStudio({
 
       // The simple example, you can use any database or another to store data.
       console.log({
-        canDelete: 'true',
+        canDelete: true,
+        username,
+        bucket
+      })
+    
+      return true
+    },
+    onBucketCanClone: async ({ username, bucket }) => {
+      // The simple example, you can use any database or another to store data.
+      console.log({
+        canClone: true,
         username,
         bucket
       })
