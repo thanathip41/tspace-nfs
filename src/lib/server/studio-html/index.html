@@ -158,6 +158,27 @@
                     0
                   </span>
                 </div>
+
+                <div class="relative">
+                  <svg
+                    id="setting" class="cursor-pointer w-6 h-6 text-gray-800 dark:text-white" fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                </div>
+
               </div>
             </div>
 
@@ -353,7 +374,64 @@
       </div>
     </div>
   </div>
-  
+
+  <div id="settingModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md dark:bg-gray-800">
+
+      <h3 class="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">
+        Settings
+      </h3>
+
+      <div class="border border-red-300 dark:border-red-700 rounded-lg p-4">
+        <h4 class="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">
+          Delete Bucket
+        </h4>
+
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          This action cannot be undone. To confirm, enter the bucket name below.
+        </p>
+
+        <label
+          for="deleteBucket"
+          class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          Bucket name
+        </label>
+
+        <input
+          id="deleteBucket"
+          name="deleteBucket"
+          type="text"
+          autocomplete="off"
+          placeholder="Enter Bucket Name"
+          class="w-full p-2 mt-1 text-gray-900 border border-gray-300 rounded-md shadow-sm
+                dark:bg-gray-700 dark:border-gray-600 dark:text-white
+                focus:ring-red-500 focus:border-red-500"
+        />
+
+        <div class="flex justify-end space-x-4 mt-4">
+          <button
+            id="deleteBucketYesBtnModal"
+            type="button"
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
+          >
+            Yes, Delete
+          </button>
+
+          <button
+            id="deleteBucketNoBtnModal"
+            type="button"
+            class="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600
+                  rounded-md text-gray-800 dark:text-white"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </body>
 <script>
 
@@ -423,6 +501,11 @@
       createFolder          : $query('#createFolder'),
       createFolderYesBtnModal : $query('#createFolderYesBtnModal'),
       createFolderNoBtnModal  : $query('#createFolderNoBtnModal'),
+      setting                : $query('#setting'),
+      settingModal           : $query('#settingModal'),
+      deleteBucket       : $query('#deleteBucket'),
+      deleteBucketYesBtnModal : $query('#deleteBucketYesBtnModal'),
+      deleteBucketNoBtnModal  : $query('#deleteBucketNoBtnModal'),
     }
   }
 
@@ -1860,6 +1943,85 @@
     $state.el.removesModal.classList.remove('hidden');
     const files = $state.data.files.filter(v => v.selected)
     $state.el.removesCountModal.textContent = `Are you sure you want to remove (${files.length}) files ?`
+  });
+
+  $state.el.setting.addEventListener('click', async() => {
+    $state.el.settingModal.classList.remove('hidden');
+  });
+
+  $state.el.deleteBucketYesBtnModal.addEventListener('click', async (e) => {
+    try {
+
+      e.preventDefault();
+
+      const path = $state.data.path.selected
+
+      const bucket = $state.el.deleteBucket.value
+
+      if(path == null || path === '') {
+        notify({
+          type : 'warning',
+          message : 'Please select a bucket to use'
+        })
+        return 
+      } 
+
+      if(bucket == null || bucket === '') {
+        notify({
+          type : 'warning',
+          message : 'The bucket is required'
+        })
+        return;
+      }
+
+      if(bucket !== $state.data.path.selected) {
+         notify({
+          type : 'warning',
+          message : 'The specified bucket is invalid'
+        })
+        return; 
+      }
+
+      showLoading();
+
+      const response = await fetch(`${$state.data.url}/studio/api/buckets`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bucket' : bucket
+        }
+      });
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.message)
+      }
+
+      $state.el.settingModal.classList.add('hidden');
+      $state.el.deleteBucket.value = '';
+      
+      localStorage.setItem('lastPathDirectory','');
+      window.location.href = "/studio";
+
+      hideLoading()
+
+      await notify({
+        type : 'success',
+        message : 'The Bucket has been deleted'
+      })
+
+    } catch (error) {
+      notify({
+        type : 'error',
+        message : error.message
+      })
+      hideLoading()
+    }
+    
+  });
+
+  $state.el.deleteBucketNoBtnModal.addEventListener('click', async (event) => {
+    $state.el.settingModal.classList.add('hidden');
   });
 
   $state.el.removesYesBtnModal.addEventListener('click', async() => {

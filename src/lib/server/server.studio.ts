@@ -24,6 +24,10 @@ class NfsStudio extends NfsServerCore {
     secret,
     token,
   }: TOnCreateBucket) => Promise<void> | null;
+   protected _onStudioBucketCanDelete?: ({
+    username,
+    bucket,
+  }: { username : string; bucket : string}) => Promise<boolean>;
   protected _onStudioCredentials?: ({
     username,
     password,
@@ -52,6 +56,7 @@ class NfsStudio extends NfsServerCore {
   useStudio({
     onCredentials,
     onBucketCreated,
+    onBucketCanDelete,
     onSetup,
     onLoadBucketCredentials,
 
@@ -72,6 +77,10 @@ class NfsStudio extends NfsServerCore {
       secret,
       bucket,
     }: TOnCreateBucket) => Promise<void>;
+    onBucketCanDelete?: ({
+      username,
+      bucket,
+    }: { username: string, bucket : string}) => Promise<boolean>;
     onLoadBucketCredentials?: (username:string) => Promise<
       TCredentials[]
     >;
@@ -87,6 +96,7 @@ class NfsStudio extends NfsServerCore {
   }): this {
     this._onStudioCredentials = onCredentials;
     this._onStudioBucketCreated = onBucketCreated;
+    this._onStudioBucketCanDelete = onBucketCanDelete
     this._onStudioLoadBucketCredentials = onLoadBucketCredentials;
     this._onStudioSetup = onSetup;
     this._onStudioRequestLogs = onLoadRequests;
@@ -525,10 +535,10 @@ class NfsStudio extends NfsServerCore {
       const [bucket, ...rest] = String(body.path).split("/");
 
       const loadCredentials = this._onStudioLoadBucketCredentials == null
-    ? []
-    : await this._onStudioLoadBucketCredentials(req.username);
+      ? []
+      : await this._onStudioLoadBucketCredentials(req.username);
 
-    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
+      const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
 
       if (!(allowBuckets.includes(bucket) || allowBuckets[0] === "*")) {
         return res.forbidden();
@@ -823,6 +833,60 @@ class NfsStudio extends NfsServerCore {
         ),
       });
     }
+
+    return res.ok();
+  };
+
+  protected studioBucketDelete = async ({ req, res, headers }: TContext) => {
+    const { bucket } = headers;
+
+    if ([bucket].some((v) => v == null || v === "")) {
+      return res.badRequest("The bucket is required.");
+    }
+
+    const loadCredentials = this._onStudioLoadBucketCredentials == null
+    ? []
+    : await this._onStudioLoadBucketCredentials(req.username);
+
+    const allowBuckets: string[] = loadCredentials.map(v => v.bucket);
+
+    if (!(allowBuckets.includes(String(bucket)) || allowBuckets[0] === "*")) {
+      return res.forbidden("You do not have permission to access this bucket.");
+    }
+
+    if(this._onStudioBucketCanDelete == null) {
+      return res.forbidden("Bucket deletion is not allowed.");
+    }
+
+    if(!(await this._onStudioBucketCanDelete({ 
+      username : req.username , 
+      bucket : String(bucket) })
+    )) {
+      return res.forbidden("You do not have permission to delete this bucket.");
+    }
+
+    const directory = this._utils.normalizeDirectory({
+      bucket: String(bucket),
+      folder: null,
+    });
+
+    if (await this._utils.fileExists(directory)) {
+      await fsSystem.promises.rm(directory, {
+        recursive: true,
+        force: true,
+      });
+    }
+
+    // if (this._onStudioBucketDeleted!= null) {
+    //   await this._onStudioBucketDeleted({
+    //     username : req.username,
+    //     bucket: String(bucket),
+    //     token: String(token == null || token === "" ? randomString(16) : token),
+    //     secret: String(
+    //       secret == null || secret === "" ? randomString(32) : secret
+    //     ),
+    //   });
+    // }
 
     return res.ok();
   };
