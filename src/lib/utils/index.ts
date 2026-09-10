@@ -906,7 +906,7 @@ export class Utils {
     }
   ) {
     const tailOption = opts.tail === -1 ? '' : `--tail=${opts.tail}`;
-    const minuteOption = opts.minutes === -1 ? '' : `--since=${opts.minutes}`;
+    const minuteOption = opts.minutes === -1 ? '' : `--since=${opts.minutes}m`;
 
     try {
       execSync(`docker inspect ${cid}`, { stdio: 'ignore' });
