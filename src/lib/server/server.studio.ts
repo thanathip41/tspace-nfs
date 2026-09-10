@@ -1333,12 +1333,20 @@ class NfsStudio extends NfsServerCore {
     }
 
     const MAX_RETRY = 8;
-    const rawTail = String(query.tail ?? "200");
+    const rawTail = String(query.tail ?? "1000");
 
     let tail = parseInt(rawTail, 10);
 
     if (isNaN(tail) || tail > 100_000) {
-      tail = 200;
+      tail = 1000;
+    }
+
+    const rawMinutes = String(query.minutes ?? "1440");
+
+    let minutes = parseInt(rawMinutes, 10);
+
+    if (isNaN(minutes) || minutes > 1440) {
+      minutes = 1440;
     }
 
     const cid = params["cid"];
@@ -1367,7 +1375,7 @@ class NfsStudio extends NfsServerCore {
       }
 
       const protocol = req.headers["x-forwarded-proto"] || "http";
-      const url = `${protocol}://${req.headers.host}/studio/api/logs/console/${cid}?tail=${tail}&retry=${retry}`;
+      const url = `${protocol}://${req.headers.host}/studio/api/logs/console/${cid}?tail=${tail}&minutes=${minutes}&retry=${retry}`;
       const authorization = cookies["auth.session"];
 
       const { data } = await axios
@@ -1389,7 +1397,11 @@ class NfsStudio extends NfsServerCore {
       return res.end(data);
     }
 
-    const command = this._utils.getLogCommand(cid,tail)
+    const command = this._utils
+    .getLogCommand(cid, {
+      tail,
+      minutes
+    })
   
     exec(command, { maxBuffer: 1024 * 1024 * 30 }, (err, stdout, stderr) => {
       if (err) {

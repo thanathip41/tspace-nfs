@@ -125,14 +125,13 @@
 
   function renderLogs() {
     const filterText = filterInput.value.toLowerCase();
-    const minutes = mode.startsWith('time:') ? parseInt(mode.split(':')[1]) : null;
-
+  
     const lines = allLogs.split('\n').filter(line => {
-      if (minutes !== null && !withinLastNMinutes(line, minutes)) return false;
       return line.toLowerCase().includes(filterText);
     });
 
     const html = ansi_up.ansi_to_html(lines.join('\n'));
+
     logConsole.innerHTML = html;
 
     if (followLogs) logConsole.scrollTop = logConsole.scrollHeight;
@@ -153,6 +152,12 @@
 
       if(mode.startsWith('all')) {
         query += `?tail=-1`;
+      }
+
+      const minutes = mode.startsWith('time:') ? parseInt(mode.split(':')[1]) : null;
+
+      if(minutes) {
+        query += query ? `&minutes=${minutes}` : `?minutes=${minutes}`
       }
 
       const response = await fetch(`${url}/studio/api/logs/console/${cid}${query}`);

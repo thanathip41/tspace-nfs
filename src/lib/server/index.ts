@@ -48,7 +48,7 @@ class NfsServer extends NfsStudio {
 
     if(this._logger) {
       this._app.useLogger({
-        exceptPath  : /\/benchmark(\/|$)|logs|\/favicon\.ico(\/|$)/
+        exceptPath  : /\/(?:benchmark|favicon\.ico|studio)(\/|$)/
       })
     }
     

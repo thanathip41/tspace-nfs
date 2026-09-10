@@ -893,19 +893,36 @@ export class Utils {
     return folders.flat().map((v) => v.replace(/\\/g, "/"));
   };
 
-  getLogCommand(cid: string, tail = -1, namespace = 'default') {
-    const tailOption = tail === -1 ? '' : `--tail=${tail}`;
+  getLogCommand(
+    cid: string, 
+    opts : { 
+      tail ?: number,
+      minutes ?: number,
+      namespace ?: string 
+    } = { 
+      tail : -1, 
+      minutes : -1,
+      namespace : 'default' 
+    }
+  ) {
+    const tailOption = opts.tail === -1 ? '' : `--tail=${opts.tail}`;
+    const minuteOption = opts.minutes === -1 ? '' : `--since=${opts.minutes}`;
 
     try {
       execSync(`docker inspect ${cid}`, { stdio: 'ignore' });
-      return `docker logs ${tailOption} ${cid}`.trim();
+
+      return `docker logs ${minuteOption} ${tailOption} ${cid}`.trim();
+
     } catch (err: any) {}
 
     try {
-      execSync(`kubectl get pod ${cid} -n ${namespace}`, {
+
+      execSync(`kubectl get pod ${cid} -n ${opts.namespace}`, {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
-      return `kubectl logs ${tailOption} ${cid} -n ${namespace}`.trim();
+
+      return `kubectl logs ${minuteOption} ${tailOption} ${cid} -n ${opts.namespace}`.trim();
+
     } catch (err: any) {}
 
     throw new Error(`Container or pod '${cid}' not found or not accessible via Docker or Kubernetes`);
