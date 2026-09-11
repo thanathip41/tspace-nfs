@@ -1083,7 +1083,10 @@
         hideLoading()
 
         $state.el.buckets.textContent = `${res.buckets ?? 0} bucket(s)`
-        $state.el.storaged.textContent = (res.storage?.mb ?? 0) > 1024 ? `${res.storage?.gb} GB` : `${res.storage?.mb} MB`
+        
+        $state.el.storaged.textContent = res.maxStorage
+        ? `${formatSize(res.storage.bytes)} / ${formatSize(res.maxStorage.bytes)}`
+        : formatSize(res.storage.bytes);
 
       } catch (error) {
           hideLoading()
@@ -1445,7 +1448,7 @@
   }
 
   function formatSize (size) {
-    const units = ["KB", "MB", "GB"];
+    const units = ["KB", "MB", "GB","TB"];
     let unitIndex = 0;
 
     size = Number.isNaN(Number(size)) ? 0 : Number(size) / 1024

@@ -47,6 +47,12 @@ class NfsStudio extends NfsServerCore {
     requests : boolean;
     console  : boolean;
   }>;
+  protected _onStudioMaxDiskStorage ? : () => Promise<{
+    bytes: number,
+    kb: number,
+    mb: number,
+    gb: number,
+  }>;
 
   private BASE_FOLDER_STUDIO = "studio-html";
   private FILE_SHARE_EXPIRED = 60 * 60 * 24 * 30 * 12; // 1 year
@@ -68,7 +74,8 @@ class NfsStudio extends NfsServerCore {
 
     onLoadRequests,
     onLoadMonitors,
-    onLoadPermissions
+    onLoadPermissions,
+    onLoadMaxDiskStorage
   }: {
     onCredentials: ({
       username,
@@ -103,6 +110,13 @@ class NfsStudio extends NfsServerCore {
       requests : boolean;
       console  : boolean;
     }>;
+    onLoadMaxDiskStorage ?: () => Promise<{
+      bytes: number;
+      kb: number;
+      mb: number;
+      gb: number;
+      tb: number;
+    }>;
   }): this {
     this._onStudioCredentials = onCredentials;
     this._onStudioBucketCreated = onBucketCreated;
@@ -113,6 +127,7 @@ class NfsStudio extends NfsServerCore {
     this._onStudioRequestLogs = onLoadRequests;
     this._onStudioMonitors = onLoadMonitors;
     this._onStudioPermissions = onLoadPermissions;
+    this._onStudioMaxDiskStorage = onLoadMaxDiskStorage;
 
     return this;
   }
@@ -199,10 +214,12 @@ class NfsStudio extends NfsServerCore {
       buckets: buckets.length,
       storage: {
         bytes: totalSize,
-        kb: Number((totalSize / 1024).toFixed(2)),
-        mb: Number((totalSize / (1024 * 1024)).toFixed(2)),
-        gb: Number((totalSize / (1024 * 1024 * 1024)).toFixed(2)),
+        kb: Number((totalSize / 1024 ** 1).toFixed(2)),
+        mb: Number((totalSize / 1024 ** 2).toFixed(2)),
+        gb: Number((totalSize / 1024 ** 3).toFixed(2)),
+        tb: Number((totalSize / 1024 ** 4).toFixed(2)),
       },
+      maxStorage : this._onStudioMaxDiskStorage == null ? null : await this._onStudioMaxDiskStorage()
     });
   };
 
