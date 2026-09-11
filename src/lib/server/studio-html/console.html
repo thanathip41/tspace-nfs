@@ -178,13 +178,14 @@
     } catch (err) {
       statusElement.textContent = 'Disconnected';
       statusElement.className = 'text-red-500 text-sm ml-2';
+    } finally {
+      isFetching = false;
     }
   }
 
   filterInput.addEventListener('input', renderLogs);
   headerCid.innerHTML = `Container: <b class="text-white text-lg"> ${cid} </b>`;
-  fetchLogs();
-
+ 
   setInterval(() => {
     fetchLogs();
   }, 2000);
