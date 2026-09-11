@@ -660,7 +660,7 @@
           ${file.isFolder
             ? `
             <label class="flex cursor-pointer">
-              <input type="checkbox" class="filesSelected hidden peer" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
+              <input type="checkbox" class="filesSelected hidden peer ${file.protected ? 'protected' : ''}" value="${file.name}" target="${file.path}" onclick="onFileSelected(event)" />
               ${file.protected
                 ? `
                 <svg class="w-6 h-6 text-gray-800 dark:text-white peer-checked:border-blue-500 peer-checked:bg-blue-500" width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -1204,7 +1204,9 @@
     const checked = e.target.checked
     const path = normalizePath(e.currentTarget.getAttribute('target'));
     
-    $state.data.files = $state.data.files.map(file => {
+    $state.data.files = $state.data.files
+    .filter(file => !file.protected)
+    .map(file => {
       if(normalizePath(file.path) === path) {
         return {...file , selected : checked  }
       }
@@ -1464,14 +1466,20 @@
   function currentTotalFiles ({ selected = false, forceAll = false , unForceAll = false } = {}) {
 
     if(forceAll) {
-      $state.data.files = $state.data.files.map(file => ({...file, selected : true }))
+      $state.data.files = $state.data.files
+      .filter(file => !file.protected)
+      .map(file => ({...file, selected : true }))
     }
 
     if(unForceAll) {
-      $state.data.files = $state.data.files.map(file => ({...file, selected : false  }))
+      $state.data.files = $state.data.files
+      .filter(file => !file.protected)
+      .map(file => ({...file, selected : false  }))
     }
    
-    const data = $state.data.files.map(file => {
+    const data = $state.data.files
+    .filter(file => !file.protected)
+    .map(file => {
       if(file.hasOwnProperty('folders')) {
         delete file.folders
       }
@@ -2034,8 +2042,7 @@
       const response = await fetch(`${$state.data.url}/studio/api/buckets/clone`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Bucket' : bucket
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
           bucket  : bucket,
@@ -2053,8 +2060,9 @@
       
       hideLoading();
 
+      await fetchStorage();
       await fetchBucket();
-      await fetchFiles(target);
+      await fetchFiles(bucket);
 
       await notify({
         type : 'success',
@@ -2128,6 +2136,8 @@
 
       hideLoading()
 
+      await fetchStorage();
+
       await notify({
         type : 'success',
         message : 'The Bucket deleted successfully.'
@@ -2156,7 +2166,9 @@
 
     $state.el.removesModal.classList.add('hidden');
     await sleep(1500)
-    await onReload()
+    await fetchStorage();
+    await fetchBucket();
+    await onReload();
     
   });
 
@@ -2169,7 +2181,10 @@
 
     const checkboxes = document.querySelectorAll('.filesSelected')
       checkboxes.forEach(checkbox => {
-      checkbox.checked = checked;
+        // checkbox.checked = checked;
+        if (!checkbox.classList.contains('protected')) {
+          checkbox.checked = checked;
+        }
     })
 
     $query('#path-checked').classList.toggle('hidden')
@@ -2180,9 +2195,9 @@
     
     checkTableStatus();
    
-    await fetchBucket();
     await fetchStorage();
-   
+    await fetchBucket();
+    
     themeToggleMode();
 
     search();

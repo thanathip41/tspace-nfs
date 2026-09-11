@@ -106,8 +106,8 @@ class NfsServer extends NfsStudio {
         router.delete('/api/buckets',this._authStudioMiddleware,this.studioBucketDelete)
         router.post('/api/folders', this._authStudioMiddleware,this.studioCreateFolder)
         router.get('/api/files/*',this._authStudioMiddleware,this.studioFiles)
-        router.put('/api/files/*', this._authStudioMiddleware,this.studioEdit)
-        router.delete('/api/files/*', this._authStudioMiddleware,this.studioRemove)
+        router.put('/api/files/*', this._authStudioMiddleware,this.studioEditFile)
+        router.delete('/api/files/*', this._authStudioMiddleware,this.studioRemoveFile)
         router.post('/api/upload',this._authStudioMiddleware,this.studioUpload)
         router.post('/api/download',this._authStudioMiddleware,this.studioDownload)
 

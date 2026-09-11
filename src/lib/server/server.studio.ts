@@ -1,15 +1,15 @@
-import pathSystem from "path";
-import fsSystem from "fs";
-import jwt from "jsonwebtoken";
-import archiver from "archiver";
-import { minify } from "html-minifier-terser";
+import pathSystem           from "path";
+import fsSystem             from "fs";
+import jwt                  from "jsonwebtoken";
+import archiver             from "archiver";
+import { minify }           from "html-minifier-terser";
+import xml                  from "xml";
+import { exec }             from "child_process";
+import axios                from "axios";
+import fsExtra              from "fs-extra";
+import { type TContext }    from "tspace-spear";
 import JavaScriptObfuscator from "javascript-obfuscator";
-import xml from "xml";
-import { exec } from "child_process";
-import axios from "axios";
-import fsExtra from "fs-extra";
-import { type TContext } from "tspace-spear";
-import { NfsServerCore } from "./server.core";
+import { NfsServerCore }    from "./server.core";
 import type {
   TCredentials,
   TLoadMonitors,
@@ -1020,7 +1020,7 @@ class NfsStudio extends NfsServerCore {
     });
   };
 
-  protected studioEdit = async ({ req, res, params, body }: TContext) => {
+  protected studioEditFile = async ({ req, res, params, body }: TContext) => {
     const path = String(params["*"])
       .replace(/^\/+/, "")
       .replace(/\.{2}(?!\.)/g, "");
@@ -1078,7 +1078,7 @@ class NfsStudio extends NfsServerCore {
     });
   };
 
-  protected studioRemove = async ({ req, res, body, params }: TContext) => {
+  protected studioRemoveFile = async ({ req, res, body, params }: TContext) => {
     const data = String(params["*"])
       .replace(/^\/+/, "")
       .replace(/\.{2}(?!\.)/g, "");
@@ -1350,7 +1350,7 @@ class NfsStudio extends NfsServerCore {
     }
 
     const MAX_RETRY = 8;
-    const rawTail = String(query.tail ?? "1000");
+    const rawTail = String(query.tail ?? "2000");
 
     let tail = parseInt(rawTail, 10);
 

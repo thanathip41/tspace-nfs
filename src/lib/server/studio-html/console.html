@@ -40,17 +40,12 @@
   <label class="block mb-2">
     <span class="text-gray-300 text-sm">Show the last</span>
     <select id="timeRange" class="mt-1 w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white">
-      <option value="tail:100" selected>100 Lines</option>
-      <option value="tail:300">300 Lines</option>
-      <option value="tail:500">500 Lines</option>
-      <option value="tail:1000">1000 Lines</option>
-      <option value="tail:10000">10000 Lines</option>
       <option value="time:1">1 Minute</option>
       <option value="time:15">15 Minutes</option>
       <option value="time:30">30 Minutes</option>
       <option value="time:60">1 Hour</option>
       <option value="time:720">12 Hours</option>
-      <option value="time:1440">24 Hours</option>
+      <option value="time:1440" selected>24 Hours</option>
       <option value="all">Everything</option>
     </select>
   </label>
@@ -149,19 +144,11 @@
     try {
 
       let query = ''
-      if (mode.startsWith('tail:')) {
-        tailLines = mode.split(':')[1];
-        query += `?tail=${tailLines}`;
-      }
-
-      if(mode.startsWith('all')) {
-        query += `?tail=-1`;
-      }
-
+     
       const minutes = mode.startsWith('time:') ? parseInt(mode.split(':')[1]) : null;
 
       if(minutes) {
-        query += query ? `&minutes=${minutes}` : `?minutes=${minutes}`
+        query += `?minutes=${minutes}`
       }
 
       const response = await fetch(`${url}/studio/api/logs/console/${cid}${query}`);
